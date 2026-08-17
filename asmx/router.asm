@@ -11,6 +11,9 @@
 ;
 ; route_dispatch: never returns. It jmps into the handler (which must
 ; end with `jmp requests`) or responds 404/405 and jmps to `requests`.
+; A custom 404 body comes from the reserved "/__not_found" route
+; (src/app/not-found.s): when no path matches, the router sets
+; resp_status=404 and dispatches to it.
 
 %include "http/http.inc"
 
@@ -20,7 +23,13 @@ extern route            ; current request path (copied by core.asm)
 extern http_get_method_idx
 extern strcmp
 extern asmx_send_status
+extern resp_status
 extern requests
+
+section .data
+    nf_route_path db "/__not_found", 0
+
+section .text
 
 global route_dispatch
 route_dispatch:
@@ -66,6 +75,28 @@ route_dispatch:
     pop r12
     jmp requests
 .not_found:
+    ; custom 404: dispatch to the reserved "/__not_found" route if present
+    mov rbx, __start_route
+    mov r14, __stop_route
+.nf_loop:
+    cmp rbx, r14
+    jge .nf_default
+    lea rdi, [nf_route_path]
+    mov rsi, [rbx]
+    call strcmp
+    test rax, rax
+    jz .nf_found
+    add rbx, 24
+    jmp .nf_loop
+.nf_found:
+    mov qword [resp_status], 404
+    mov rax, [rbx + 8]          ; GET handler of the not-found route
+    test rax, rax
+    jz .nf_default
+    pop r13
+    pop r12
+    jmp rax
+.nf_default:
     mov rdi, 404
     call asmx_send_status
     pop r13

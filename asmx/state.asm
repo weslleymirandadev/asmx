@@ -9,6 +9,7 @@ section .data
     ; HTTP response parts
     http_200    db "HTTP/1.1 200 OK", 13, 10
     http_200_len equ $ - http_200
+    resp_status dq 200        ; status line code used by send_* (router sets 404 for not-found)
 
     ct_json     db "Content-Type: application/json", 13, 10
     ct_json_len equ $ - ct_json
@@ -48,6 +49,7 @@ section .bss
 
 ; Export everything the framework needs
 global http_200, http_200_len
+global resp_status
 global ct_json, ct_json_len, ct_text, ct_text_len, ct_html, ct_html_len
 global cl_prefix, crlf2
 global status_table, status_count

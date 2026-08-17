@@ -26,7 +26,7 @@ extern itoa_buf
 extern accept_error
 extern read_error
 extern server_fd, client_fd, asmx_handler
-extern buffer, route
+extern buffer, route, resp_status
 
 section .data
     msg_listen db "asmx: listening on http://localhost:"
@@ -123,6 +123,10 @@ requests:
     mov rdi, buffer
     mov rsi, rbx
     call http_parse_headers
+
+    ; Reset the response status for this request (router may set 404
+    ; for the not-found route on the previous one)
+    mov qword [resp_status], 200
 
     ; Dispatch to the user handler (never returns - handler jmps to requests)
     mov rax, [asmx_handler]
