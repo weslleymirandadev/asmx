@@ -29,7 +29,7 @@ extern server_fd, client_fd, asmx_handler
 extern buffer, route
 
 section .data
-    msg_listen db "asmx: listening on "
+    msg_listen db "asmx: listening on http://localhost:"
     msg_listen_len equ $ - msg_listen
     msg_nl db 10
 
