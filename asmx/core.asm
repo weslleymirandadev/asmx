@@ -21,10 +21,17 @@ extern http_parse_headers
 extern http_get_path
 extern strlen
 extern strncpy
+extern itoa
+extern itoa_buf
 extern accept_error
 extern read_error
 extern server_fd, client_fd, asmx_handler
 extern buffer, route
+
+section .data
+    msg_listen db "asmx: listening on "
+    msg_listen_len equ $ - msg_listen
+    msg_nl db 10
 
 section .text
 
@@ -32,14 +39,37 @@ section .text
 ; asmx_listen(port) - never returns
 ; Arguments: rdi = port (host byte order)
 ; Grabs the return address (user handler) from the stack, creates the
-; listening socket, then falls through into the `requests` accept loop.
+; listening socket, prints a startup banner, then falls through into
+; the `requests` accept loop.
 ; ----------------------------------------------------------------------
 global asmx_listen
 asmx_listen:
     pop rax
     mov [asmx_handler], rax
+    mov r12, rdi                  ; port (r12 callee-saved)
     call socket_bind_listen       ; rdi = port, rax = server_fd
     mov [server_fd], rax
+
+    ; print "asmx: listening on <port>\n" (itoa clobbers rdi/rsi - recompute)
+    mov rax, SYS_write
+    mov rdi, 1
+    lea rsi, [msg_listen]
+    mov rdx, msg_listen_len
+    syscall
+    mov rdi, r12
+    lea rsi, [itoa_buf]
+    call itoa                     ; rax = ptr to first digit
+    mov rsi, rax
+    lea rdx, [itoa_buf + 11]
+    sub rdx, rsi                  ; digit count
+    mov rax, SYS_write
+    mov rdi, 1
+    syscall
+    mov rax, SYS_write
+    mov rdi, 1
+    lea rsi, [msg_nl]
+    mov rdx, 1
+    syscall
     ; fall through to requests
 
 ; ----------------------------------------------------------------------
