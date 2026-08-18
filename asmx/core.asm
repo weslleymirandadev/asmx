@@ -2,7 +2,7 @@
 ; asmx runtime - the framework engine
 ;
 ; Flow:
-;   user code:  listen 8080          -> asmx_listen grabs return address as
+;   user code:  listen 3000          -> asmx_listen grabs return address as
 ;                                      handler, creates socket, falls into
 ;                                      `requests` accept loop
 ;   requests:   accept -> read -> parse -> copy path to `route` -> jmp handler
