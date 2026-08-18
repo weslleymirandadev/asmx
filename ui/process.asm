@@ -70,6 +70,13 @@ process:
     mov rdi, r15
     call find_block_end
     mov rbx, rax                ; end of block
+    ; expand @comp lines (src/components/*.s, {param} args) - the block
+    ; may grow/shrink inside in_buf, so re-find the end afterwards
+    mov rdi, r15
+    mov rsi, rbx
+    call expand_block
+    mov rbx, rax                ; end of the expanded block
+    mov r13, [in_len]           ; the expansion may have grown in_buf
     ; copy the label line (with \n if any)
     mov rdi, r12
     mov rsi, r14
