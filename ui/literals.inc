@@ -30,6 +30,18 @@ msg_blob_len  equ $ - msg_blob
 msg_tag       db "ui-compile: unknown tag: ", 0
 msg_tag_len   equ $ - msg_tag - 1        ; without the null (token follows)
 msg_nl        db 10, 0
+msg_comp_missing db "ui-compile: cannot read component file (src/components/<name>.s)", 10
+msg_comp_missing_len equ $ - msg_comp_missing
+msg_comp_label db "ui-compile: component block not found (label <name>:)", 10
+msg_comp_label_len equ $ - msg_comp_label
+msg_comp_param db "ui-compile: missing parameter '{...}' in @comp", 10
+msg_comp_param_len equ $ - msg_comp_param
+msg_comp_depth db "ui-compile: component nesting too deep", 10
+msg_comp_depth_len equ $ - msg_comp_depth
+msg_comp_args  db "ui-compile: invalid @comp arguments", 10
+msg_comp_args_len equ $ - msg_comp_args
+s_components   db "src/components/", 0
+s_comp_tag     db "comp", 0
 
 ; --- literais do output (shell no page.s + WAT) ---
 s_sh1         db "_shell: db ", 0
