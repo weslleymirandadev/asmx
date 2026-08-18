@@ -33,39 +33,38 @@ section .data
             db '  document.head.appendChild(st);', 10
             db '  if (e.ui_theme_bg) document.body.style.background = hex(e.ui_theme_bg());', 10
             db '  if (e.ui_theme_text) document.body.style.color = hex(e.ui_theme_text());', 10
+            db '  const els = [];', 10
             db '  const syncDOM = () => {', 10
             db '    const buf = mem(), v = new DataView(buf);', 10
             db '    const n = e.widget_count(), base = e.widgets();', 10
-            db '    const nodes = new Map();', 10
             db '    for (let i = 0; i < n; i++) {', 10
             db '      const o = base + i*32;', 10
             db '      const type = v.getUint8(o);', 10
             db '      const x = v.getInt16(o+2,true), y = v.getInt16(o+4,true), w = v.getInt16(o+6,true), h = v.getInt16(o+8,true);', 10
             db '      const r = v.getUint8(o+12), g = v.getUint8(o+13), b = v.getUint8(o+14);', 10
             db '      const parent = v.getInt32(o+20,true);', 10
-            db '      let el;', 10
+            db '      let el = els[i];', 10
             db '      if (type === 1) {', 10
-            db '        el = document.createElement("span");', 10
+            db '        if (!el || el.tagName !== "SPAN") { el = document.createElement("span"); els[i] = el; }', 10
             db '        const fs = v.getUint8(o+24) || 13;', 10
-            db '        el.style.cssText = "position:absolute;left:"+x+"px;top:"+y+"px;width:"+w+"px;height:"+h+"px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:"+fs+"px;color:rgb("+r+","+g+","+b+")";', 10
+            db '        const css = "position:absolute;left:"+x+"px;top:"+y+"px;width:"+w+"px;height:"+h+"px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:"+fs+"px;color:rgb("+r+","+g+","+b+")";', 10
+            db '        if (el.style.cssText !== css) el.style.cssText = css;', 10
             db '        const tp = v.getUint32(o+16,true);', 10
             db '        let end = tp; while (v.getUint8(end) !== 0) end++;', 10
-            db '        el.textContent = dec.decode(new Uint8Array(buf, tp, end-tp));', 10
+            db '        const txt = dec.decode(new Uint8Array(buf, tp, end-tp));', 10
+            db '        if (el.textContent !== txt) el.textContent = txt;', 10
             db '      } else if (type === 2) {', 10
-            db '        el = ui.querySelector("canvas");', 10
-            db '        if (!el) { el = document.createElement("canvas"); el.width = w; el.height = h; }', 10
+            db '        if (!el || el.tagName !== "CANVAS") { el = document.createElement("canvas"); el.width = w; el.height = h; els[i] = el; }', 10
             db '        el.style.cssText = "position:absolute;left:"+x+"px;top:"+y+"px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.4)";', 10
             db '      } else {', 10
-            db '        el = document.createElement("div");', 10
-            db '        el.style.cssText = "position:absolute;left:"+x+"px;top:"+y+"px;width:"+w+"px;height:"+h+"px;background:rgba("+r+","+g+","+b+",1);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.4)";', 10
+            db '        if (!el || el.tagName !== "DIV") { el = document.createElement("div"); els[i] = el; }', 10
+            db '        const css = "position:absolute;left:"+x+"px;top:"+y+"px;width:"+w+"px;height:"+h+"px;background:rgba("+r+","+g+","+b+",1);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.4)";', 10
+            db '        if (el.style.cssText !== css) el.style.cssText = css;', 10
             db '      }', 10
-            db '      nodes.set(i, { el, parent });', 10
+            db '      const pe = (parent >= 0 && els[parent]) ? els[parent] : ui;', 10
+            db '      if (el.parentNode !== pe) pe.appendChild(el);', 10
             db '    }', 10
-            db '    ui.innerHTML = "";', 10
-            db '    for (const { el, parent } of nodes.values()) {', 10
-            db '      if (parent >= 0 && nodes.has(parent)) nodes.get(parent).el.appendChild(el);', 10
-            db '      else ui.appendChild(el);', 10
-            db '    }', 10
+            db '    for (let i = n; i < els.length; i++) { if (els[i]) { els[i].remove(); els[i] = null; } }', 10
             db '  };', 10
             db '  if (e.init) e.init();', 10
             db '  if (e.render) e.render();', 10
