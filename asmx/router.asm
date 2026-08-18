@@ -29,9 +29,11 @@ extern strcmp
 extern asmx_send_status
 extern resp_status
 extern requests
+extern wasm_glue_serve
 
 section .data
     nf_route_path db "/__not_found", 0
+    glue_path     db "/_asmx/glue.js", 0
 
 section .text
 
@@ -73,6 +75,18 @@ route_dispatch:
     pop r12
     jmp requests
 .not_found:
+    ; framework virtual file: /_asmx/glue.js (the WASM UI renderer) -
+    ; no public/ entry needed, the glue is part of the framework
+    lea rdi, [glue_path]
+    lea rsi, [route]
+    call strcmp
+    test rax, rax
+    jnz .static_fallback
+    call wasm_glue_serve
+    pop r13
+    pop r12
+    jmp requests
+.static_fallback:
     ; Next.js-style static fallback: no route matched, try public/<path>
     ; (GET only - static files are not endpoints for other methods)
     call http_get_method_idx

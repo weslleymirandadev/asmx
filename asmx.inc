@@ -232,6 +232,21 @@ section .CLIENT progbits align=16
 %endmacro
 
 ; ----------------------------------------------------------------------
+; component "name" - declare a WASM UI component for the page (like
+; <Component/> in React). The build compiles src/ui/<name>.wat ->
+; public/<name>.wasm automatically (path derived from the file); ssr_render
+; turns the ui_modules section into data-modules="<name>.wasm,..." on the
+; #ui container and the framework glue loads the listed modules.
+; ----------------------------------------------------------------------
+%macro component 1
+    section .data
+    %%path: db "/", %1, ".wasm", 0
+    section ui_modules
+    dq %%path
+    section .text
+%endmacro
+
+; ----------------------------------------------------------------------
 ; Objects (dot notation) - the framework as a "class".
 ; Properties are %define aliases (zero cost), methods are %macro wrappers
 ; around the existing functions. Everything resolves at assembly time.

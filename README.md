@@ -248,7 +248,7 @@ between server and client concerns:
 %include "asmx.inc"
 
 section .CLIENT
-    client "/app.wasm"
+    client "/app.js"
 
 section .data
     index_tpl db '<h1>home</h1><p>assembled on the server</p>@client@', 0
@@ -271,6 +271,25 @@ get_index:
 `GET /` returns the fully assembled HTML with the client script tag
 injected — the server renders the page, exactly like SSR.
 
+WebAssembly modules are NOT client assets: a `<script src="app.wasm">`
+tag would make the browser parse the module as JS. Load them from the
+glue script instead:
+
+```html
+<script type="module">
+  const { instance } = await WebAssembly.instantiateStreaming(fetch('/app.wasm'));
+  instance.exports.init?.();
+</script>
+```
+
+The demo page (`src/ui/app.wat` -> `public/app.wasm` via `make`, path
+derived from the file like the routes) renders a pulsing ring + progress
+bar on a canvas — app state and every pixel come from the WASM module, JS
+is only the canvas glue. `src/ui/lib.wat` is the UI "macro" library
+(`$put_pixel`, `$clear`, `$fill_rect`, `$draw_ring`) — the Makefile
+includes it into every module automatically (WAT has no `%include`, so
+the build wraps `lib.wat` + the module inside one `(module ...)`).
+
 ### Section conventions
 
 | section  | use                                  | exec |
@@ -286,7 +305,7 @@ The dev server logs like Next.js — colored startup banner and one line
 per request (no user code needed):
 
 ```
-[ASMX] : listening on http://localhost:8080
+[ASMX]: listening on http://localhost:8080
 GET / 200 (508ms)
 GET /api/hello 200 (8ms)
 GET /missing 404 (6ms)

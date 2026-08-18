@@ -13,12 +13,18 @@
 
 extern __start_client
 extern __stop_client
+extern __start_ui_modules
+extern __stop_ui_modules
 extern strncmp
 
 section .data
     ph       db "@client@", 0
+    ph_mod   db "@modules@", 0
     tag_pre  db '<script src="', 0
     tag_post db '"></script>', 0
+    mod_pre  db 'data-modules="', 0
+    mod_post db '"', 0
+    comma    db ',', 0
 
 section .text
 
@@ -40,13 +46,21 @@ ssr_render:
     jz .done
     cmp al, '@'
     jne .plain
-    ; check the full placeholder (8 bytes)
+    ; check the @client@ placeholder (8 bytes)
     lea rsi, [ph]
     lea rdi, [r12 + rbx]
     mov rdx, 8
     call strncmp          ; clobbers rdi/rsi/rcx/rdx/r8 - rbx/r12-r15 safe
     test rax, rax
     jz .inject
+    ; check the @modules@ placeholder (9 bytes)
+    lea rsi, [ph_mod]
+    lea rdi, [r12 + rbx]
+    mov rdx, 9
+    call strncmp
+    test rax, rax
+    jz .inject_mod
+    jmp .plain
 .plain:
     mov al, [r12 + rbx]
     call putc_byte
@@ -69,6 +83,28 @@ ssr_render:
     jmp .tag_loop
 .inject_done:
     add rbx, 8
+    jmp .loop
+.inject_mod:
+    ; data-modules="PATH,PATH,..." (comma separated)
+    lea rdi, [mod_pre]
+    call puts_str
+    mov rcx, __start_ui_modules
+    mov rdx, __stop_ui_modules
+.mod_loop:
+    cmp rcx, rdx
+    jge .mod_done
+    mov rdi, [rcx]
+    call puts_str
+    add rcx, 8
+    cmp rcx, rdx
+    jge .mod_done
+    lea rdi, [comma]
+    call puts_str
+    jmp .mod_loop
+.mod_done:
+    lea rdi, [mod_post]
+    call puts_str
+    add rbx, 9
     jmp .loop
 .done:
     test r14, r14
@@ -109,6 +145,7 @@ puts_str:
     pop r12
     ret
 
-; ensure the `client` linker section exists even with no client assets,
-; so __start_client/__stop_client are always defined
+; ensure the `client` and `ui_modules` linker sections exist even with
+; no assets, so the __start/__stop symbols are always defined
 section client
+section ui_modules
