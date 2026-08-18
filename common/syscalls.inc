@@ -24,5 +24,6 @@
 %define SYS_epoll_ctl   233
 %define SYS_epoll_wait  232
 %define SYS_openat      257
+%define SYS_mkdir       83
 %define SYS_epoll_create1 291
 %endif
