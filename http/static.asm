@@ -1,10 +1,10 @@
 ; src/http/static.asm
-; Static file server: maps a request path to public/<path>, streams the
+; Static file server: maps a request path to static/<path>, streams the
 ; file with a proper Content-Type + Content-Length.
 ; http_serve_static(rdi = path) -> rax = 0 ok, -1 not found/error
 ; The path comes from the `route` buffer ("/app.wasm") and starts with
-; '/', so "public" + path = "public/app.wasm". Directories are rejected
-; (serving public/ for "/" would be wrong - "/" is a real route).
+; '/', so "static" + path = "static/app.wasm". Directories are rejected
+; (serving static/ for "/" would be wrong - "/" is a real route).
 ; On -1 nothing was sent; the caller decides the status (404).
 
 %include "http/http.inc"
@@ -19,8 +19,8 @@ extern mime_lookup
 extern write_status_line
 
 section .data
-    public_str db "public", 0
-    public_str_len equ $ - public_str - 1   ; copy without the null (path appends its own)
+    static_str db "static", 0
+    static_str_len equ $ - static_str - 1   ; copy without the null (path appends its own)
 
 section .text
 
@@ -35,8 +35,8 @@ http_serve_static:
 
     ; path_buf = "public" + path (path includes its null terminator)
     lea rdi, [path_buf]
-    lea rsi, [public_str]
-    mov rdx, public_str_len
+    lea rsi, [static_str]
+    mov rdx, static_str_len
     call memcpy_adv           ; rax = path_buf + len
     mov rbx, rax              ; append dest
     mov rdi, r14
