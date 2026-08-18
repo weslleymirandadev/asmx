@@ -49,8 +49,8 @@ myapp/
 │   ├── http/            <- HTTP parsing, MIME, static files
 │   ├── json/            <- JSON parser + stringifier
 │   └── net/             <- socket_bind_listen
-├── public/              <- static assets, served automatically
-│   └── index.html
+├── static/               <- static assets, served automatically
+│   └── <route>/page.wasm  <- per-page UI wasm (root: index.wasm)
 ├── src/
 │   ├── main.asm         <- entry point: listen + route dispatch
 │   └── app/             <- your routes (see Routing below)
@@ -65,7 +65,7 @@ The build passes it to the assembler via `-DROUTE_PATH`.
 | file                          | route       | kind         |
 |-------------------------------|-------------|--------------|
 | `src/app/page.s`              | `/`         | HTML page    |
-| `src/app/sobre/page.s`        | `/sobre`    | HTML page    |
+| `src/app/about/page.s`        | `/about`    | HTML page    |
 | `src/app/api/hello/route.s`   | `/api/hello`| API handler  |
 | `src/app/not-found.s`         | (reserved)  | 404 page     |
 
@@ -210,6 +210,8 @@ res.           response
   res.html ptr         respond 200, text/html
   res.status code      respond with a status code, empty body
   res.bytes ptr, len   respond 200 JSON, explicit length
+  res.content ptr      page.s @ DSL block: send the HTML shell whose glue
+                       renders the server-side UI nodes (see below)
 
 json.          json domain
   json.parse buf, len
@@ -290,6 +292,49 @@ is only the canvas glue. `src/ui/lib.wat` is the UI "macro" library
 includes it into every module automatically (WAT has no `%include`, so
 the build wraps `lib.wat` + the module inside one `(module ...)`).
 
+### Server UI nodes (the `@` DSL)
+
+A `page.s` can declare its UI directly in `.data` with the `@` DSL —
+Tailwind-ish classes, indentation = children, bare strings on their own
+line. It is NOT HTML: the build (`asmx/ui/compile.py`) compiles the
+block into a serialized UI node tree (the ASMXUIV1 wire format — the
+same 32-byte widget records the WASM runtime uses), an HTML shell, and
+an auto-registered `<route>.nodes` endpoint that serves the raw node
+blob (`Content-Type: application/asmx-ui`). The framework glue fetches
+it via `data-ui-src` and renders the tree to the DOM.
+
+```nasm
+; src/app/about/page.s  ->  GET /about
+%include "asmx.inc"
+
+section .data
+    about_content:
+        @main bg-black text-white min-h-screen p-8
+            @h1 text-4xl font-bold
+                "About o ASMX"
+            @p text-gray-400
+                "Fullstack Assembly + WebAssembly"
+        @end
+
+page get_about
+
+section .SERVER
+get_about:
+    res.content about_content
+    asmx.next
+```
+
+- Tags: `@main @div @section @nav @header @footer @h1 @h2 @h3 @p @span @a @button`.
+- Classes: `bg-<color> text-<color> text-<size> font-bold p-* m-* mt-* mb-* w-* min-h-screen` — same palette/sizes as `src/ui/*.ui` scenes.
+- `@theme bg #hex text #hex accent #hex` (optional, anywhere in the block).
+  Without it, the root view's `bg-*` becomes the page background —
+  `@main bg-black` renders a black page.
+- `res.content <label>` sends the generated shell (`<label>_shell`);
+  the blob itself is served at `<route>.nodes` — `curl /about.nodes`
+  returns the serialized UI IR, no HTML involved.
+- This is static server rendering (no events) — for interactive UI use
+  `src/ui/*.ui` components (`component "name"` + `data-modules`).
+
 ### Section conventions
 
 | section  | use                                  | exec |
@@ -309,7 +354,7 @@ per request (no user code needed):
 GET / 200 (508ms)
 GET /api/hello 200 (8ms)
 GET /missing 404 (6ms)
-POST /sobre 405 (7ms)
+POST /about 405 (7ms)
 ```
 
 Colors: `[ASMX]` cyan bold, method+path bold, status green 2xx / yellow
