@@ -38,3 +38,16 @@ wat_count:    resq 1
 mkdir_done:   resq 1
 path_buf:     resb 512
 local_of:     resb MAX_RECORDS * 4
+comp_buf:     resb IN_CAP
+comp_len:     resq 1
+expand_buf:   resb IN_CAP
+expand_len:   resq 1
+arg_list:     resb MAX_ARGS * ARG_ENTRY_SIZE
+arg_count:    resq 1
+comp_path:    resb 512
+comp_name:    resb 64
+comp_name_len: resq 1
+comp_stack:   resb MAX_COMP_DEPTH * 8
+comp_depth:   resq 1
+save_label_buf: resb 64
+save_label_len: resq 1
