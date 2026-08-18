@@ -17,6 +17,8 @@ section .data
     ct_text_len equ $ - ct_text
     ct_html     db "Content-Type: text/html", 13, 10
     ct_html_len equ $ - ct_html
+    ct_ui       db "Content-Type: application/asmx-ui", 13, 10
+    ct_ui_len   equ $ - ct_ui
 
     cl_prefix   db "Content-Length: ", 0
     crlf2       db 13, 10, 13, 10       ; end of headers
@@ -52,6 +54,7 @@ section .bss
 global http_200, http_200_len
 global resp_status
 global ct_json, ct_json_len, ct_text, ct_text_len, ct_html, ct_html_len
+global ct_ui, ct_ui_len
 global cl_prefix, crlf2, conn_close
 global status_table, status_count
 global http_prefix, cl_zero
