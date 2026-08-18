@@ -1,4 +1,4 @@
-# asmx
+# ASMX
 
 A web framework written in x86-64 assembly (NASM) for Linux. No libc, no
 runtime, no dependencies — just a static ELF binary that speaks HTTP.
