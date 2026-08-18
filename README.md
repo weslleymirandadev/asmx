@@ -13,8 +13,13 @@ bodies and building responses.
 - Linux x86-64
 - NASM (`nasm`)
 - GNU ld (`ld`)
-- GNU make
+- GNU make (`make`)
+- WABT (`wat2wasm`)
 - git (for `asmx init`)
+
+```bash
+sudo apt install nasm binutils wabt git -y
+```
 
 ## Quick start
 
@@ -28,8 +33,13 @@ sudo ln -s "$PWD/build/asmx" /usr/local/bin/asmx   # optional
 
 mkdir myapp && cd myapp
 asmx init myapp              # clones the framework + scaffolds a project
+
+# Build the server
 make
 ./build/server
+
+# Build and run
+asmx dev
 ```
 
 That's it. The server listens on port 8080:
