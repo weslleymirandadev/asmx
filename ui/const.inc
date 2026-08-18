@@ -42,6 +42,11 @@
 %define MAX_STACK    32
 %define MAX_RECORDS  128
 
+; @comp components (expand.asm)
+%define MAX_ARGS        16
+%define ARG_ENTRY_SIZE  32      ; key_ptr, key_len, val_ptr, val_len (dq each)
+%define MAX_COMP_DEPTH  16
+
 ; node struct offsets (u32 unless noted)
 %define N_TAG        0               ; u8: 0=view 1=label 2=button
 %define N_TEXT_PTR   2               ; u32 offset into in_buf (0 = no text)
