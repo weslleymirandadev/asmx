@@ -30,6 +30,13 @@ extern log_banner, log_request, clock_start
 section .bss
     sig_action resq 4     ; struct sigaction: sa_handler, sa_flags, sa_restorer, sa_mask
 
+section .data
+    rcv_timeout dq 0, 300000  ; struct timeval { tv_sec = 0, tv_usec = 300ms }
+                              ; SO_RCVTIMEO: a legit request arrives in
+                              ; <10ms after connect; 300ms just kills
+                              ; stale/preconnect sockets fast so the
+                              ; next refresh waits at most ~0.3s
+
 section .text
 
 ; ----------------------------------------------------------------------
@@ -65,6 +72,22 @@ asmx_listen:
     mov rax, SYS_rt_sigaction
     syscall
 
+    ; Ignore SIGPIPE (13): a client that closes the connection while we
+    ; are writing would KILL the server (default SIGPIPE action = die).
+    ; This was observed live (exit -13): the browser cancelling a load
+    ; or a curl timeout made the whole server vanish. With SIG_IGN the
+    ; write just fails with EPIPE and the accept loop continues.
+    mov qword [sig_action + 0], 1     ; sa_handler = SIG_IGN
+    mov qword [sig_action + 8], 0     ; sa_flags
+    mov qword [sig_action + 16], 0    ; sa_restorer
+    mov qword [sig_action + 24], 0    ; sa_mask
+    lea rsi, [sig_action]
+    xor rdx, rdx                      ; oldact = NULL
+    mov r10, 8                        ; sigsetsize
+    mov rdi, 13                       ; SIGPIPE
+    mov rax, SYS_rt_sigaction
+    syscall
+
     mov rdi, r12                  ; restore port (sigaction clobbered rdi)
     call socket_bind_listen       ; rax = server_fd
     mov [server_fd], rax
@@ -84,12 +107,11 @@ requests:
 
     ; Close previous client if any (fd > 2)
     cmp qword [client_fd], 2
-    jle .no_close
+    jle .accept
     mov rax, SYS_close
     mov rdi, [client_fd]
     syscall
-.no_close:
-
+.accept:
     ; Accept a connection
     mov rax, SYS_accept
     mov rdi, [server_fd]
@@ -99,13 +121,27 @@ requests:
     check_syscall accept_error
     mov [client_fd], rax
 
+    ; SO_RCVTIMEO on the client socket: a client that connects and never
+    ; sends (browser preconnect, stale connection) would block the
+    ; single-threaded accept loop forever - the next refresh would hang
+    ; in the backlog and time out. With a receive timeout the read fails
+    ; with EAGAIN after 5s and we close that client + accept again.
+    mov rdi, [client_fd]
+    mov rax, SYS_setsockopt
+    mov rsi, 1        ; SOL_SOCKET
+    mov rdx, 20       ; SO_RCVTIMEO
+    lea r10, [rcv_timeout]
+    mov r8, 16        ; sizeof(struct timeval)
+    syscall
+
     ; Read the request
     mov rax, SYS_read
     mov rdi, [client_fd]
     lea rsi, [buffer]
     mov rdx, 4096
     syscall
-    check_syscall read_error
+    test rax, rax
+    js .read_close
     mov rbx, rax                  ; bytes_read (rbx callee-saved)
 
     ; Start the request timer - the request bytes just arrived, so the
@@ -140,3 +176,12 @@ requests:
     ; Dispatch to the user handler (never returns - handler jmps to requests)
     mov rax, [asmx_handler]
     jmp rax
+
+.read_close:
+    ; Idle client (EAGAIN from SO_RCVTIMEO) or read error: close the
+    ; socket and go back to accepting - never die, never block the loop.
+    mov rax, SYS_close
+    mov rdi, [client_fd]
+    syscall
+    mov qword [client_fd], -1
+    jmp .accept

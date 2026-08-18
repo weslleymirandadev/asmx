@@ -10,7 +10,7 @@ extern resp_buf
 extern itoa_buf
 extern resp_status
 extern ct_json, ct_json_len, ct_text, ct_text_len, ct_html, ct_html_len
-extern cl_prefix, crlf2
+extern cl_prefix, crlf2, conn_close
 extern http_prefix, cl_zero
 extern status_table, status_count
 extern memcpy_adv, strcpy_adv
@@ -74,6 +74,15 @@ write_status_line:
     call strcpy_adv
     mov r15, rax
 .done:
+    ; Connection: close - the server handles ONE request per connection.
+    ; Without it, HTTP/1.1 keep-alive makes the browser REUSE the socket
+    ; on refresh: the accept loop waits for a NEW connection and never
+    ; reads the reused one -> browser timeout. With Connection: close the
+    ; browser opens a fresh connection for every request.
+    mov rdi, r15
+    lea rsi, [conn_close]
+    call strcpy_adv
+    mov r15, rax
     ret
 
 ; asmx_send_common(rdi = body, rsi = content-type, rdx = ct_len)

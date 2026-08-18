@@ -43,7 +43,7 @@ section .data
 
     banner_pre  db 10, 10, 0
     banner_name db '[ASMX]', 0
-    banner_mid  db ' : listening on ', 0
+    banner_mid  db ': listening on ', 0
     banner_url  db 'http://localhost:', 0
     banner_post db 10, 0
 

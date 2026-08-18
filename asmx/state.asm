@@ -20,6 +20,7 @@ section .data
 
     cl_prefix   db "Content-Length: ", 0
     crlf2       db 13, 10, 13, 10       ; end of headers
+    conn_close  db "Connection: close", 13, 10, 0
 
     ; Status code -> reason table (dq code, dq reason_ptr = 16 bytes/entry)
     status_table:
@@ -51,7 +52,7 @@ section .bss
 global http_200, http_200_len
 global resp_status
 global ct_json, ct_json_len, ct_text, ct_text_len, ct_html, ct_html_len
-global cl_prefix, crlf2
+global cl_prefix, crlf2, conn_close
 global status_table, status_count
 global http_prefix, cl_zero
 global server_fd, client_fd, asmx_handler
