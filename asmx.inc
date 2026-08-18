@@ -150,12 +150,21 @@ extern ct_json, ct_json_len
 
 ; ----------------------------------------------------------------------
 ; File routes (Next.js-style) - route declaration
-;   route "/api/user", get_user, post_user   (0 = method not supported)
+;   route get_user, post_user      (0 = method not supported)
 ;
 ;   section .GET
 ;   get_user:
 ;       send_json user_data
 ;       jmp requests
+;
+; The route PATH is NOT declared here - it derives from the file location
+; at build time (Makefile passes -DROUTE_PATH="..."), exactly like Next.js:
+;   src/app/page.s            -> "/"
+;   src/app/sobre/page.s      -> "/sobre"
+;   src/app/api/hello/route.s -> "/api/hello"
+;   src/app/not-found.s       -> "/__not_found" (reserved 404 route)
+; Static files are NOT routes: anything in public/ is served automatically
+; by the router fallback (asmx/router.asm), no route declaration needed.
 ;
 ; Emits one 24-byte entry in the `route` section (dq path, GET, POST);
 ; GNU ld defines __start_route/__stop_route over it and the router
@@ -166,11 +175,11 @@ extern ct_json, ct_json_len
 section .GET exec progbits align=16
 section .POST exec progbits align=16
 
-%macro route 1-3 0
+%macro route 1-2 0
     section .data
-    %%path: db %1, 0
+    %%path: db ROUTE_PATH, 0
     section route
-    dq %%path, %2, %3
+    dq %%path, %1, %2
     section .text
 %endmacro
 

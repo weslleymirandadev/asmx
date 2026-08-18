@@ -1,0 +1,148 @@
+; src/http/mime.asm
+; MIME type lookup for static files.
+; mime_lookup(rdi = filename) -> rax = content-type line ptr, rdx = len
+; The returned line is a full header template ("Content-Type: X\r\n"),
+; same shape as ct_json/ct_html in state.asm - ready to copy into the
+; response header. Unknown extensions fall back to octet-stream.
+
+%include "http/http.inc"
+
+extern strcmp
+extern ct_html, ct_html_len, ct_json, ct_json_len, ct_text, ct_text_len
+
+section .data
+    ct_wasm db "Content-Type: application/wasm", 13, 10
+    ct_wasm_len equ $ - ct_wasm
+    ct_css  db "Content-Type: text/css", 13, 10
+    ct_css_len equ $ - ct_css
+    ct_js   db "Content-Type: application/javascript", 13, 10
+    ct_js_len equ $ - ct_js
+    ct_png  db "Content-Type: image/png", 13, 10
+    ct_png_len equ $ - ct_png
+    ct_jpg  db "Content-Type: image/jpeg", 13, 10
+    ct_jpg_len equ $ - ct_jpg
+    ct_octet db "Content-Type: application/octet-stream", 13, 10
+    ct_octet_len equ $ - ct_octet
+
+    ext_wasm db ".wasm", 0
+    ext_html db ".html", 0
+    ext_css  db ".css", 0
+    ext_js   db ".js", 0
+    ext_png  db ".png", 0
+    ext_jpg  db ".jpg", 0
+    ext_jpeg db ".jpeg", 0
+    ext_json db ".json", 0
+    ext_txt  db ".txt", 0
+
+section .text
+
+global mime_lookup
+mime_lookup:
+    push r12
+    mov r12, rdi              ; filename
+
+    ; find last '.' - offset kept in rcx (0 = none)
+    xor rcx, rcx
+    xor rax, rax
+.find_dot:
+    cmp byte [r12 + rcx], 0
+    je .dot_done
+    cmp byte [r12 + rcx], '.'
+    jne .next_char
+    mov rax, rcx
+.next_char:
+    inc rcx
+    jmp .find_dot
+.dot_done:
+    test rax, rax
+    jz .default_ct            ; no extension
+
+    ; extension ptr = filename + last_dot_offset
+    lea r12, [r12 + rax]
+
+    ; strcmp chain - strcmp clobbers rdi/rsi/rcx, so reload both args
+    mov rdi, r12
+    lea rsi, [ext_wasm]
+    call strcmp
+    test rax, rax
+    jz .wasm
+    lea rsi, [ext_html]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .html
+    lea rsi, [ext_css]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .css
+    lea rsi, [ext_js]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .js
+    lea rsi, [ext_png]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .png
+    lea rsi, [ext_jpg]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .jpg
+    lea rsi, [ext_jpeg]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .jpg
+    lea rsi, [ext_json]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .json
+    lea rsi, [ext_txt]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .txt
+    jmp .default_ct
+
+.wasm:
+    lea rax, [ct_wasm]
+    mov rdx, ct_wasm_len
+    jmp .done
+.html:
+    lea rax, [ct_html]
+    mov rdx, ct_html_len
+    jmp .done
+.css:
+    lea rax, [ct_css]
+    mov rdx, ct_css_len
+    jmp .done
+.js:
+    lea rax, [ct_js]
+    mov rdx, ct_js_len
+    jmp .done
+.png:
+    lea rax, [ct_png]
+    mov rdx, ct_png_len
+    jmp .done
+.jpg:
+    lea rax, [ct_jpg]
+    mov rdx, ct_jpg_len
+    jmp .done
+.json:
+    lea rax, [ct_json]
+    mov rdx, ct_json_len
+    jmp .done
+.txt:
+    lea rax, [ct_text]
+    mov rdx, ct_text_len
+    jmp .done
+.default_ct:
+    lea rax, [ct_octet]
+    mov rdx, ct_octet_len
+.done:
+    pop r12
+    ret

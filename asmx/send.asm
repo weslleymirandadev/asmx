@@ -37,6 +37,8 @@ asmx_send_html:
 ; write_status_line() - writes "HTTP/1.1 <code><reason>\r\n" at [r15]
 ; using [resp_status] and status_table; r15 = advanced pos.
 ; Clobbers rax, rcx, rdx, rdi, rsi, r10 - preserves r12/r13/r14/rbx.
+; Exported so static.asm can build file response headers with it.
+global write_status_line
 write_status_line:
     mov rdi, r15
     lea rsi, [http_prefix]

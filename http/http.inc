@@ -53,6 +53,8 @@
 ; line_scanner.asm  : http_scan_lines
 ; response.asm      : http_send_response, http_send_method_denied,
 ;                     http_send_not_found
+; mime.asm          : mime_lookup (ext -> Content-Type header line)
+; static.asm        : http_serve_static (stream public/<path>)
 ; handler.asm       : handle_client (entry point called by main.asm)
 
 %endif

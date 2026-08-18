@@ -21,6 +21,7 @@ extern __start_route
 extern __stop_route
 extern route            ; current request path (copied by core.asm)
 extern http_get_method_idx
+extern http_serve_static
 extern strcmp
 extern asmx_send_status
 extern resp_status
@@ -75,6 +76,16 @@ route_dispatch:
     pop r12
     jmp requests
 .not_found:
+    ; Next.js-style static fallback: no route matched, try public/<path>
+    ; (GET only - static files are not endpoints for other methods)
+    call http_get_method_idx
+    test rax, rax
+    jnz .nf_route
+    lea rdi, [route]
+    call http_serve_static
+    test rax, rax
+    jz .nf_served
+.nf_route:
     ; custom 404: dispatch to the reserved "/__not_found" route if present
     mov rbx, __start_route
     mov r14, __stop_route
@@ -99,6 +110,10 @@ route_dispatch:
 .nf_default:
     mov rdi, 404
     call asmx_send_status
+    pop r13
+    pop r12
+    jmp requests
+.nf_served:
     pop r13
     pop r12
     jmp requests
