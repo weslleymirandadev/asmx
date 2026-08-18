@@ -24,7 +24,7 @@ section .data
 section .text
 
 ; socket_bind_listen(port) -> rax = server_fd
-; Arguments: rdi = port (host byte order, e.g. 8080)
+; Arguments: rdi = port (host byte order, e.g. 3000)
 ; Sets SO_REUSEADDR before bind so restarts don't fail on TIME_WAIT.
 socket_bind_listen:
     ; Convert port to network byte order (swap bytes) and store in sockaddr
