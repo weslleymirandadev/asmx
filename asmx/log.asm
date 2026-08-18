@@ -2,7 +2,7 @@
 ; Terminal logging: colored startup banner + per-request log lines in
 ; Next.js dev-server style, e.g.:
 ;
-;   [ASMX] : listening on http://localhost:8080
+;   [ASMX] : listening on http://localhost:3000
 ;   GET /api/hello 200 (2ms)
 ;   GET / 200 (0ms)
 ;
@@ -39,7 +39,12 @@ section .data
 
     space       db ' ', 0
     ms_open     db ' (', 0
-    ms_close    db 'ms)', 10, 0
+    dot         db '.', 0
+    us_suf      db ' μs)', 10, 0
+    ms_suf      db ' ms)', 10, 0
+    s_suf       db ' s)', 10, 0
+    min_m       db 'm', 0
+    min_s       db 's)', 10, 0
 
     banner_pre  db 10, 10, 0
     banner_name db '[ASMX]', 0
@@ -109,8 +114,8 @@ log_request:
     ; --- log the request that just finished ---
     lea rdi, [ts_end]
     call clock_now
-    ; elapsed ms = (sec_delta * 1000) + (nsec_delta / 1e6), handling the
-    ; nsec borrow (nsec_end < nsec_start while sec_delta >= 1)
+    ; total_ns = sec_delta * 1e9 + nsec_delta, handling the nsec borrow
+    ; (nsec_end < nsec_start while sec_delta >= 1)
     mov r12, [ts_end]
     sub r12, [ts_start]        ; sec delta
     mov rax, [ts_end + 8]
@@ -122,15 +127,10 @@ log_request:
 .nsec_ok:
     mov r13, rax               ; nsec delta
     mov rax, r12
-    mov rbx, 1000
-    mul rbx                    ; rdx:rax = sec delta * 1000
-    mov r14, rax               ; ms base
-    mov rax, r13
-    xor rdx, rdx
-    mov rbx, 1000000
-    div rbx                    ; rax = nsec delta / 1e6
-    add rax, r14
-    mov r15, rax               ; total ms
+    mov rbx, 1000000000
+    mul rbx                    ; rdx:rax = sec delta * 1e9
+    add rax, r13               ; total_ns
+    mov r15, rax
 
     ; BOLD method path SPACE [status color] STATUS RESET GRAY (ms) RESET NL
     lea rsi, [ansi_bold]
@@ -178,19 +178,56 @@ log_request:
     lea rdi, [ms_open]
     call print_str
 
-    ; duration digits - itoa(rdi = value, rsi = buf) -> rax = first digit ptr
+    ; adaptive duration: minutes (rare) / s / ms / μs, 1 decimal each
+    mov rax, r15                ; total_ns
+    mov rbx, 60000000000        ; 60e9 > 2^32: via register, never imm32-truncated
+    cmp rax, rbx                ; >= 60s -> minutes
+    jae .minutes
+    cmp rax, 1000000000         ; >= 1s -> seconds
+    jae .seconds
+    cmp rax, 1000000            ; >= 1ms -> milliseconds
+    jae .millis
+    ; micros: value*10 = total_ns / 100
     mov rdi, r15
-    lea rsi, [itoa_buf]
-    call itoa
-    mov rsi, rax
-    lea rdx, [itoa_buf + 11]
-    sub rdx, rsi
-    mov rax, SYS_write
-    mov rdi, 1
-    syscall
-
-    lea rdi, [ms_close]
+    mov rsi, 100
+    call print_dec1
+    lea rdi, [us_suf]
     call print_str
+    jmp .dur_done
+.millis:
+    mov rdi, r15
+    mov rsi, 100000
+    call print_dec1
+    lea rdi, [ms_suf]
+    call print_str
+    jmp .dur_done
+.seconds:
+    mov rdi, r15
+    mov rsi, 100000000
+    call print_dec1
+    lea rdi, [s_suf]
+    call print_str
+    jmp .dur_done
+.minutes:
+    mov rax, r15
+    xor rdx, rdx
+    mov rbx, 1000000000
+    div rbx                     ; rax = total seconds
+    mov r12, rax
+    xor rdx, rdx
+    mov rbx, 60
+    div rbx                     ; rax = minutes, rdx = seconds
+    mov r13, rax
+    mov r14, rdx
+    mov rdi, r13
+    call print_itoa
+    lea rdi, [min_m]
+    call print_str
+    mov rdi, r14
+    call print_itoa
+    lea rdi, [min_s]
+    call print_str
+.dur_done:
     lea rsi, [ansi_reset]
     call write_ansi
 .first:
@@ -244,4 +281,51 @@ print_str:
     mov rax, SYS_write
     mov rdi, 1
     syscall
+    ret
+
+; ----------------------------------------------------------------------
+; print_itoa(rdi = value) - itoa + write(1) of the digits
+; ----------------------------------------------------------------------
+print_itoa:
+    push r12
+    mov r12, rdi
+    mov rdi, r12
+    lea rsi, [itoa_buf]
+    call itoa                   ; rax = ptr to first digit
+    mov rsi, rax
+    lea rdx, [itoa_buf + 11]
+    sub rdx, rsi                ; digit count
+    mov rax, SYS_write
+    mov rdi, 1
+    syscall
+    pop r12
+    ret
+
+; ----------------------------------------------------------------------
+; print_dec1(rdi = total_ns, rsi = divisor) - prints "N.N" (1 decimal).
+; The value in tenths = total_ns / divisor, so the divisor must make the
+; unit*10: 100 for μs, 100000 for ms, 100000000 for s.
+; ----------------------------------------------------------------------
+print_dec1:
+    push rbx
+    push r12
+    push r13
+    mov rax, rdi
+    mov rbx, rsi
+    xor rdx, rdx
+    div rbx                     ; rax = value*10
+    mov r12, rax
+    xor rdx, rdx
+    mov rbx, 10
+    div rbx                     ; rax = integer part, rdx = tenths digit
+    mov r13, rdx
+    mov rdi, rax
+    call print_itoa
+    lea rdi, [dot]
+    call print_str
+    mov rdi, r13
+    call print_itoa
+    pop r13
+    pop r12
+    pop rbx
     ret
