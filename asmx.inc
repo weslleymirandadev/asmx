@@ -204,7 +204,7 @@ extern ct_ui, ct_ui_len
 ;   src/app/sobre/page.s      -> "/sobre"
 ;   src/app/api/hello/route.s -> "/api/hello"
 ;   src/app/not-found.s       -> "/__not_found" (reserved 404 route)
-; Static files are NOT routes: anything in public/ is served automatically
+; Static files are NOT routes: anything in static/ is served automatically
 ; by the router fallback (asmx/router.asm), no route declaration needed.
 ;
 ; Emits one 24-byte entry in the `route` section (dq path, GET, POST);
@@ -382,11 +382,12 @@ section .CLIENT progbits align=16
 
 ; ----------------------------------------------------------------------
 ; res.content PTR - send the page shell of an @ DSL block (page.s).
-; The @ block compiler (asmx/ui/compile.py) generates, next to the UI
-; node blob <name>:, a shell template <name>_shell (the page container
-; with data-ui-src="<route>.nodes" + the framework glue script) and an
-; auto-registered GET <route>.nodes that serves the raw node blob
-; (Content-Type: application/asmx-ui). The glue renders the nodes.
+; The @ block compiler (asmx/ui/ui-compile) generates, next to the UI
+; shell <label>_shell (the page container with
+; data-modules="/<route>[/page].wasm" + the framework glue script) and
+; one .wat per component + a _main.wat. The Makefile links them with
+; the framework wasm lib -> static/<route>/page.wasm (root:
+; static/index.wasm), which the glue instantiates and renders.
 ; ----------------------------------------------------------------------
 %macro res.content 1
     mov rdi, %1%+_shell
