@@ -42,10 +42,10 @@ make
 asmx dev
 ```
 
-That's it. The server listens on port 8080:
+That's it. The server listens on port 3000:
 
 ```
-[ASMX]: listening on http://localhost:8080
+[ASMX]: listening on http://localhost:3000
 ```
 
 ## Project structure
@@ -360,7 +360,7 @@ The dev server logs like Next.js — colored startup banner and one line
 per request (no user code needed):
 
 ```
-[ASMX]: listening on http://localhost:8080
+[ASMX]: listening on http://localhost:3000
 GET / 200 (508ms)
 GET /api/hello 200 (8ms)
 GET /missing 404 (6ms)
@@ -541,16 +541,16 @@ New routes and new framework modules build with no edits.
 ## Testing
 
 ```bash
-curl -v http://localhost:8080/
-curl http://localhost:8080/api/hello
-curl http://localhost:8080/app.wasm        # static file
-curl -X POST http://localhost:8080/api/echo -d '{"x":1}'
-curl http://localhost:8080/nonexistent     # custom 404
+curl -v http://localhost:3000/
+curl http://localhost:3000/api/hello
+curl http://localhost:3000/app.wasm        # static file
+curl -X POST http://localhost:3000/api/echo -d '{"x":1}'
+curl http://localhost:3000/nonexistent     # custom 404
 ```
 
 ## How it works
 
-- `main.asm` calls `listen 8080`, which grabs the return address as the
+- `main.asm` calls `listen 3000`, which grabs the return address as the
   per-request handler, binds the socket and falls into the `requests`
   accept loop: accept -> read -> parse request line + headers -> copy the
   path into `route` -> dispatch.
