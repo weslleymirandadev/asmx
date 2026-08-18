@@ -8,6 +8,7 @@
 %include "ui/main.asm"
 %include "ui/io.asm"
 %include "ui/process.asm"
+%include "ui/expand.asm"
 %include "ui/parse.asm"
 %include "ui/layout.asm"
 %include "ui/serialize.asm"
