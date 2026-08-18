@@ -8,6 +8,7 @@
 %define SYS_read         0
 %define SYS_write        1
 %define SYS_open         2
+%define SYS_rt_sigaction 13
 %define SYS_close        3
 %define SYS_fstat        5
 %define SYS_mmap         9

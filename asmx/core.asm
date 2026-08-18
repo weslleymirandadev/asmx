@@ -27,6 +27,9 @@ extern server_fd, client_fd, asmx_handler
 extern buffer, route, resp_status
 extern log_banner, log_request, clock_start
 
+section .bss
+    sig_action resq 4     ; struct sigaction: sa_handler, sa_flags, sa_restorer, sa_mask
+
 section .text
 
 ; ----------------------------------------------------------------------
@@ -41,7 +44,29 @@ asmx_listen:
     pop rax
     mov [asmx_handler], rax
     mov r12, rdi                  ; port (r12 callee-saved)
-    call socket_bind_listen       ; rdi = port, rax = server_fd
+
+    ; Reset SIGINT/SIGTERM to DEFAULT: the parent environment may leave
+    ; them IGNORED (SIG_IGN is inherited across fork/exec - observed
+    ; SigIgn=0x6), so Ctrl+C would never kill the server and the port
+    ; would stay bound forever. SIG_DFL (sa_handler = 0) makes the kernel
+    ; kill the process and close the socket; SO_REUSEADDR (net.asm) then
+    ; allows an immediate rebind. No custom handler = no signal frame.
+    mov qword [sig_action + 0], 0     ; sa_handler = SIG_DFL
+    mov qword [sig_action + 8], 0     ; sa_flags
+    mov qword [sig_action + 16], 0    ; sa_restorer
+    mov qword [sig_action + 24], 0    ; sa_mask
+    lea rsi, [sig_action]
+    xor rdx, rdx                      ; oldact = NULL
+    mov r10, 8                        ; sigsetsize = sizeof(kernel sigset_t)
+    mov rdi, 2                        ; SIGINT
+    mov rax, SYS_rt_sigaction
+    syscall
+    mov rdi, 15                       ; SIGTERM
+    mov rax, SYS_rt_sigaction
+    syscall
+
+    mov rdi, r12                  ; restore port (sigaction clobbered rdi)
+    call socket_bind_listen       ; rax = server_fd
     mov [server_fd], rax
 
     ; print the colored startup banner (log.asm)
