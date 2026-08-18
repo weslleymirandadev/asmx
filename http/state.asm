@@ -10,6 +10,7 @@ section .data
     http_method_get     db "GET", 0
     http_method_post    db "POST", 0
     http_method_put     db "PUT", 0
+    http_method_patch   db "PATCH", 0
     http_method_delete  db "DELETE", 0
     http_method_head    db "HEAD", 0
     http_method_options db "OPTIONS", 0
@@ -19,6 +20,7 @@ section .data
         dd http_method_get - http_method_table
         dd http_method_post - http_method_table
         dd http_method_put - http_method_table
+        dd http_method_patch - http_method_table
         dd http_method_delete - http_method_table
         dd http_method_head - http_method_table
         dd http_method_options - http_method_table
@@ -69,7 +71,8 @@ section .bss
 
 ; Export everything the package needs
 global http_method_get, http_method_post, http_method_put
-global http_method_delete, http_method_head, http_method_options
+global http_method_patch, http_method_delete
+global http_method_head, http_method_options
 global http_method_table, http_method_count
 global http_space_char, http_newline_char, http_cr_char
 global http_response_200, http_response_200_len

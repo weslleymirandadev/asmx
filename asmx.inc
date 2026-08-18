@@ -34,6 +34,7 @@
 %include "common/common.inc"
 %include "net/net.inc"
 %include "http/http.inc"
+%include "json/json.inc"
 
 ; ----------------------------------------------------------------------
 ; Public API (defined in src/asmx/*.asm)
@@ -57,6 +58,21 @@ extern requests
 extern http_get_method_idx
 extern http_get_body
 extern http_get_body_len
+; Request object wrappers (asmx/req.asm) + method string buffer
+extern asmx_req_body
+extern asmx_req_body_len
+extern asmx_req_get
+extern asmx_req_has
+extern http_req_method
+; SSR helper (asmx/ssr.asm)
+extern ssr_render
+; JSON domain (json/*.asm) - available through the json. object macros
+extern json_parse
+extern json_find
+extern json_str_int
+extern json_str_bool
+extern json_str_null
+extern json_str_string
 ; Content-type templates (asmx/state.asm) - used by send_*_bytes macros
 extern ct_json, ct_json_len
 
@@ -174,13 +190,218 @@ extern ct_json, ct_json_len
 ; ----------------------------------------------------------------------
 section .GET exec progbits align=16
 section .POST exec progbits align=16
+section .PUT exec progbits align=16
+section .PATCH exec progbits align=16
+section .DELETE exec progbits align=16
+section .SERVER exec progbits align=16
+section .CLIENT progbits align=16
 
-%macro route 1-2 0
+; route GET, POST, PUT, PATCH, DELETE (0 = method not supported).
+; All 5 args are REQUIRED - NASM expands omitted macro args as empty
+; (the declared default only fills the first missing one), so wrappers
+; pass the zeros explicitly.
+%macro route 5
     section .data
     %%path: db ROUTE_PATH, 0
     section route
-    dq %%path, %1, %2
+    dq %%path, %1, %2, %3, %4, %5
     section .text
+%endmacro
+
+; ----------------------------------------------------------------------
+; page HANDLER - page route with IMPLICIT GET (Next.js: pages are
+; GET-only; POST gets an automatic 405). Page code lives in
+; `section .SERVER` (runs on the server, SSR); client assets live in
+; `section .CLIENT` and are injected into the HTML by ssr_render.
+; ----------------------------------------------------------------------
+%macro page 1
+    route %1, 0, 0, 0, 0
+%endmacro
+
+; ----------------------------------------------------------------------
+; client "PATH" - register a client asset (e.g. "/app.wasm"). Each entry
+; goes into the `client` linker section (__start_client/__stop_client),
+; which ssr_render turns into <script src="PATH"></script> tags.
+; ----------------------------------------------------------------------
+%macro client 1
+    section .data
+    %%path: db %1, 0
+    section client
+    dq %%path
+    section .text
+%endmacro
+
+; ----------------------------------------------------------------------
+; Objects (dot notation) - the framework as a "class".
+; Properties are %define aliases (zero cost), methods are %macro wrappers
+; around the existing functions. Everything resolves at assembly time.
+;
+;   asmx.listen PORT     bind + accept loop (alias of `listen`)
+;   asmx.next            end the handler (jmp requests)
+;
+;   req.path             current path buffer (property)
+;   req.method           method string "GET" (property)
+;   req.method_idx       rax = method index (GET=0, POST=1)
+;   req.body             rax = POST body ptr
+;   req.body_len         rax = POST body len
+;   req.get "key"        json_find over the body (rax/rdx/rcx, -1 if missing)
+;   req.has "key"        rax = 1 if key exists
+;
+;   res.json/text/html PTR    respond 200 with that content type
+;   res.status CODE           respond with a status code, empty body
+;   res.bytes PTR, LEN        respond 200 JSON, explicit length
+;
+;   json.parse BUF, LEN
+;   json.find BUF, LEN, "key"
+;   json.str_int VALUE, DST | json.str_bool VALUE, DST | json.str_null DST
+;   json.str_string SRC, DST, CAP
+;
+;   route.get HANDLER / route.post HANDLER / route.put HANDLER /
+;   route.patch HANDLER / route.delete HANDLER / route.both GET, POST
+;   (or route GET, POST, PUT, PATCH, DELETE - 0 = not supported)
+; ----------------------------------------------------------------------
+%macro asmx.listen 1
+    mov rdi, %1
+    call asmx_listen
+%endmacro
+
+%macro asmx.next 0
+    jmp requests
+%endmacro
+
+%define req.path    route
+%define req.method  http_req_method
+
+%macro req.method_idx 0
+    call http_get_method_idx
+%endmacro
+
+%macro req.body 0
+    call asmx_req_body
+%endmacro
+
+%macro req.body_len 0
+    call asmx_req_body_len
+%endmacro
+
+%macro req.get 1
+    %ifstr %1
+        jmp %%skip
+    %%key: db %1, 0
+    %%skip:
+        lea rdi, [%%key]
+    %else
+        lea rdi, [%1]
+    %endif
+    call asmx_req_get
+%endmacro
+
+%macro req.has 1
+    %ifstr %1
+        jmp %%skip
+    %%key: db %1, 0
+    %%skip:
+        lea rdi, [%%key]
+    %else
+        lea rdi, [%1]
+    %endif
+    call asmx_req_has
+%endmacro
+
+%macro res.json 1
+    mov rdi, %1
+    call asmx_send_json
+%endmacro
+
+%macro res.text 1
+    mov rdi, %1
+    call asmx_send_text
+%endmacro
+
+%macro res.html 1
+    mov rdi, %1
+    call asmx_send_html
+%endmacro
+
+%macro res.status 1
+    mov rdi, %1
+    call asmx_send_status
+%endmacro
+
+%macro res.bytes 2
+    mov rdi, %1
+    mov rsi, %2
+    lea rdx, [ct_json]
+    mov rcx, ct_json_len
+    call asmx_send_bytes
+%endmacro
+
+%macro json.parse 2
+    mov rdi, %1
+    mov rsi, %2
+    call json_parse
+%endmacro
+
+%macro json.find 3
+    mov rdi, %1
+    mov rsi, %2
+    %ifstr %3
+        jmp %%skip
+    %%key: db %3, 0
+    %%skip:
+        lea rdx, [%%key]
+    %else
+        lea rdx, [%3]
+    %endif
+    call json_find
+%endmacro
+
+%macro json.str_int 2
+    mov rdi, %1
+    mov rsi, %2
+    call json_str_int
+%endmacro
+
+%macro json.str_bool 2
+    mov rdi, %1
+    mov rsi, %2
+    call json_str_bool
+%endmacro
+
+%macro json.str_null 1
+    mov rsi, %1
+    call json_str_null
+%endmacro
+
+%macro json.str_string 3
+    mov rdi, %1
+    mov rsi, %2
+    mov rdx, %3
+    call json_str_string
+%endmacro
+
+%macro route.get 1
+    route %1, 0, 0, 0, 0
+%endmacro
+
+%macro route.post 1
+    route 0, %1, 0, 0, 0
+%endmacro
+
+%macro route.put 1
+    route 0, 0, %1, 0, 0
+%endmacro
+
+%macro route.patch 1
+    route 0, 0, 0, %1, 0
+%endmacro
+
+%macro route.delete 1
+    route 0, 0, 0, 0, %1
+%endmacro
+
+%macro route.both 2
+    route %1, %2, 0, 0, 0
 %endmacro
 
 %endif

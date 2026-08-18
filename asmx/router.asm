@@ -4,10 +4,13 @@
 ;
 ; Route table: the `route` section, filled by src/app/*/route.s via the
 ; `route` macro (src/app/route.inc). GNU ld defines __start_route and
-; __stop_route over it. Each entry is 24 bytes:
+; __stop_route over it. Each entry is 48 bytes:
 ;   +0   dq path ptr
-;   +8   dq GET handler    (0 = method not supported)
-;   +16  dq POST handler   (0 = method not supported)
+;   +8   dq GET handler     (0 = method not supported)
+;   +16  dq POST handler
+;   +24  dq PUT handler
+;   +32  dq PATCH handler
+;   +40  dq DELETE handler
 ;
 ; route_dispatch: never returns. It jmps into the handler (which must
 ; end with `jmp requests`) or responds 404/405 and jmps to `requests`.
@@ -46,24 +49,18 @@ route_dispatch:
     call strcmp               ; clobbers rdi/rsi/rcx - r12/r13 safe
     test rax, rax
     jz .found
-    add r12, 24
+    add r12, 48
     jmp .loop
 .found:
     call http_get_method_idx
     test rax, rax
-    jz .get
-    cmp rax, HTTP_M_POST
-    je .post
-    jmp .method_not_allowed
-.get:
-    mov rax, [r12 + 8]
-    test rax, rax
-    jz .method_not_allowed
-    pop r13
-    pop r12
-    jmp rax
-.post:
-    mov rax, [r12 + 16]
+    js .method_not_allowed    ; unknown method (-1)
+    cmp rax, HTTP_M_DELETE
+    jg .method_not_allowed    ; HEAD/OPTIONS not dispatched yet
+    shl rax, 3                ; handler slot = idx * 8
+    add rax, 8                ; past the path ptr
+    lea rbx, [r12 + rax]
+    mov rax, [rbx]
     test rax, rax
     jz .method_not_allowed
     pop r13
@@ -97,7 +94,7 @@ route_dispatch:
     call strcmp
     test rax, rax
     jz .nf_found
-    add rbx, 24
+    add rbx, 48
     jmp .nf_loop
 .nf_found:
     mov qword [resp_status], 404

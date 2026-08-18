@@ -17,13 +17,14 @@
 %define HTTP_M_GET      0
 %define HTTP_M_POST     1
 %define HTTP_M_PUT      2
-%define HTTP_M_DELETE   3
-%define HTTP_M_HEAD     4
-%define HTTP_M_OPTIONS  5
+%define HTTP_M_PATCH    3
+%define HTTP_M_DELETE   4
+%define HTTP_M_HEAD     5
+%define HTTP_M_OPTIONS  6
 %define HTTP_M_UNKNOWN  -1
 
 ; Number of entries in the method table (must match the table in http_state.asm)
-%define HTTP_METHOD_COUNT 6
+%define HTTP_METHOD_COUNT 7
 
 ; ---------------------------------------------------------------
 ; CONVENTIONS - follow these to keep the codebase uniform

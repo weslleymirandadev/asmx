@@ -21,17 +21,11 @@ extern http_parse_headers
 extern http_get_path
 extern strlen
 extern strncpy
-extern itoa
-extern itoa_buf
 extern accept_error
 extern read_error
 extern server_fd, client_fd, asmx_handler
 extern buffer, route, resp_status
-
-section .data
-    msg_listen db 0xA, 0xA, "[ASMX]: listening on http://localhost:"
-    msg_listen_len equ $ - msg_listen
-    msg_nl db 10
+extern log_banner, log_request, clock_start
 
 section .text
 
@@ -50,26 +44,9 @@ asmx_listen:
     call socket_bind_listen       ; rdi = port, rax = server_fd
     mov [server_fd], rax
 
-    ; print "asmx: listening on <port>\n" (itoa clobbers rdi/rsi - recompute)
-    mov rax, SYS_write
-    mov rdi, 1
-    lea rsi, [msg_listen]
-    mov rdx, msg_listen_len
-    syscall
+    ; print the colored startup banner (log.asm)
     mov rdi, r12
-    lea rsi, [itoa_buf]
-    call itoa                     ; rax = ptr to first digit
-    mov rsi, rax
-    lea rdx, [itoa_buf + 11]
-    sub rdx, rsi                  ; digit count
-    mov rax, SYS_write
-    mov rdi, 1
-    syscall
-    mov rax, SYS_write
-    mov rdi, 1
-    lea rsi, [msg_nl]
-    mov rdx, 1
-    syscall
+    call log_banner
     ; fall through to requests
 
 ; ----------------------------------------------------------------------
@@ -77,6 +54,9 @@ asmx_listen:
 ; ----------------------------------------------------------------------
 global requests
 requests:
+    ; Log the request that just finished (if any) and timestamp this one
+    call log_request
+
     ; Close previous client if any (fd > 2)
     cmp qword [client_fd], 2
     jle .no_close
@@ -102,6 +82,10 @@ requests:
     syscall
     check_syscall read_error
     mov rbx, rax                  ; bytes_read (rbx callee-saved)
+
+    ; Start the request timer - the request bytes just arrived, so the
+    ; duration covers only actual processing, not idle wait
+    call clock_start
 
     ; Parse request line
     mov rdi, buffer
