@@ -234,15 +234,86 @@ parse_comp_args:
     ; ":" -> {children} content ("conteúdo" after the colon)
     cmp byte [r15], ':'
     je .children
-    ; key = [r15, r8) until '='
+    ; key = [r15, r8) until '=' (or ':' for a TYPED prop: name: type)
     mov r8, r15
 .ks:
     cmp r8, r13
     jge .err
     cmp byte [r8], '='
     je .ks_done
+    cmp byte [r8], ':'
+    je .ks_typed
     inc r8
     jmp .ks
+.ks_typed:
+    ; typed prop: <state>: <type_name> - the expand pass runs BEFORE the
+    ; states are registered, so we only record {state_ptr, state_len,
+    ; type_ptr, type_len} here; validate_typed_props() checks it after
+    ; compile_block (when state_lookup works).
+    mov r10, r15                ; state name ptr (in_buf offset)
+    mov r11, r8
+    sub r11, r15                ; state name len
+    ; type name: [r8+1, space)
+    lea r12, [r8 + 1]
+.kt_ws:
+    cmp r12, r13
+    jge .err
+    mov al, [r12]
+    cmp al, ' '
+    je .kt_ws_inc
+    cmp al, 9
+    jne .kt_type
+.kt_ws_inc:
+    inc r12
+    jmp .kt_ws
+.kt_type:
+    mov r14, r12
+.kt_scan:
+    cmp r14, r13
+    jge .kt_have
+    mov al, [r14]
+    cmp al, ' '
+    je .kt_have
+    cmp al, 9
+    je .kt_have
+    inc r14
+    jmp .kt_scan
+.kt_have:
+    cmp qword [tp_prop_count], MAX_TYPED_PROPS
+    jge .err
+    mov r9d, r14d
+    sub r9d, r12d               ; type name len (r9 survives the loads below)
+    mov rax, [tp_prop_count]
+    imul rax, rax, 136
+    lea rdx, [tp_props + rax]
+    ; copy the state name (r10 ptr, r11 len) - the @@ splice will
+    ; overwrite the line these pointers reference
+    mov r15, r11
+    xor r8, r8
+.tc1:
+    cmp r8, r15
+    jge .tc1_done
+    mov cl, [r10 + r8]
+    mov [rdx + r8], cl
+    inc r8
+    jmp .tc1
+.tc1_done:
+    mov [rdx + 64], r15d        ; state name len
+    ; copy the type name (r12 ptr, r9 len)
+    xor r8, r8
+.tc2:
+    cmp r8, r9
+    jge .tc2_done
+    mov cl, [r12 + r8]
+    mov [rdx + 68 + r8], cl
+    inc r8
+    jmp .tc2
+.tc2_done:
+    mov [rdx + 132], r9d        ; type name len
+    inc qword [tp_prop_count]
+    ; continue after the type name
+    mov r15, r14
+    jmp .arg_loop
 .ks_done:
     ; value = "..." (quoted)
     inc r8                      ; skip '='
@@ -842,7 +913,7 @@ copy_subst:
     dec rsi
     call arg_lookup             ; rax = val ptr, rdx = val len
     cmp rax, -1
-    je .err
+    je .state_ph
     mov rbx, rdx                ; val len (rdx dies in the copy loop)
     mov r9, [expand_len]
     xor r8, r8
@@ -857,6 +928,25 @@ copy_subst:
     add [expand_len], rbx
     mov r12, r14
     inc r12                     ; skip '}'
+    jmp .loop
+.state_ph:
+    ; {state} / {state.field} / any unknown placeholder: preserve it
+    ; literally - the expand pass runs BEFORE the states are registered,
+    ; so we can't look them up here; check_interp validates the expanded
+    ; text later (with the states available)
+    mov r8, r14
+    inc r8                       ; end (after '}')
+    mov r9, [expand_len]
+.st_cp:
+    cmp r12, r8
+    jge .st_cp_done
+    mov cl, [comp_buf + r12]
+    mov [expand_buf + r9], cl
+    inc r9
+    inc r12
+    jmp .st_cp
+.st_cp_done:
+    mov [expand_len], r9
     jmp .loop
 .done:
     pop r14
@@ -970,3 +1060,74 @@ memmove_back:
     cld
 .done:
     ret
+
+; ----------------------------------------------------------------------
+; validate_typed_props() - checks every recorded typed @@ prop against
+; the registered states (the expand pass runs before compile_block, so
+; the lookup only works here). Dies on: unknown state, scalar state, or
+; a type name mismatch.
+; ----------------------------------------------------------------------
+validate_typed_props:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    xor r12, r12
+.vt_loop:
+    cmp r12, [tp_prop_count]
+    jge .done
+    imul rax, r12, 136
+    lea rbx, [tp_props + rax]
+    ; find the state by its COPIED name (the @@ splice overwrote the
+    ; original line, so offsets into it are dead)
+    xor r13, r13
+.vt_sloop:
+    cmp r13, [state_count]
+    jge .err
+    imul rax, r13, STATE_ENTRY
+    lea r14, [state_tab + rax]
+    mov eax, [rbx + 64]
+    cmp [r14 + S_NAME_LEN], eax
+    jne .vt_snext
+    mov edx, [r14 + S_NAME_PTR]
+    lea rdi, [in_buf + rdx]
+    lea rsi, [rbx]
+    mov edx, [rbx + 64]         ; u32 state name len!
+    call strncmp
+    test rax, rax
+    jz .vt_sfound
+.vt_snext:
+    inc r13
+    jmp .vt_sloop
+.vt_sfound:
+    ; the state must be an object of the annotated type
+    imul rax, r13, STATE_ENTRY
+    mov edx, [state_tab + rax + S_TYPE_IDX]
+    cmp edx, -1
+    je .err                     ; scalar state can't take a named type
+    imul rdx, rdx, TYPE_ENTRY
+    mov ecx, [type_tab + rdx + T_NAME_PTR]
+    mov r8d, [type_tab + rdx + T_NAME_LEN]
+    mov eax, [rbx + 132]
+    cmp r8d, eax
+    jne .err                    ; type name length mismatch
+    lea rdi, [in_buf + rcx]
+    lea rsi, [rbx + 68]
+    mov rdx, r8
+    call strncmp
+    test rax, rax
+    jnz .err                    ; type name mismatch
+    inc r12
+    jmp .vt_loop
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.err:
+    lea rdi, [msg_comp_param]
+    mov rsi, msg_comp_param_len
+    call die
