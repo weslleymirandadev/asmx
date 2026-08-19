@@ -292,12 +292,12 @@ get_about:
 - `res.content <label>` sends the generated shell (`<label>_shell`); the
   glue script loads `<route>/page.wasm` and renders the widgets.
 
-### Interactive elements
+### Interactive elements (declarative state)
 
-A page with a `@button` and a `@p` containing `"count: 0"` gets a wired
-`handle_event` automatically: clicking the button (or pressing SPACE)
-increments the digit. The generated WASM keeps a `$count` global and
-re-renders the dirty widget (the glue polls `ui_dirty`).
+Pages declare state with `state` directives and wire events with the
+`onclick` attribute — no magic string patterns. State lives in WASM
+linear memory (scalars or typed records); the compiler emits the render
++ update logic, and the glue only forwards clicks by widget id.
 
 ```nasm
 ; src/app/page.s (the home page)
@@ -305,22 +305,37 @@ section .data
     index_content:
         @theme bg #0f1117 text #f5f5f5 accent #f97316
         @main p-8
+            state count: int = 0
             @h1 text-5xl font-bold text-orange-500:
-                "OLHA O MACACeO"
+                "OLHA O MACACO"
             @p text-gray-400 mt-4:
                 "assembly no servidor - wasm no browser"
             @div mt-8 p-6:
                 @p text-2xl:
-                    "count: 0"
-                @button bg-orange-500 mt-6 p-3:
+                    "count: {count}"
+                @button bg-orange-500 mt-6 p-3 onclick="count++":
                     "CLIQUE AQUI"
+                @button bg-orange-500 mt-2 p-3 onclick="count = 0":
+                    "ZERAR"
             @p text-gray-400 mt-8:
                 "aperte ESPACO ou clique no botao"
         @end
 ```
 
-The build recognizes the `count: N` text pattern and emits a hit-test +
-increment handler in the module (see `asx/ui/literals.inc`).
+- `state <name>: <type> = <value>` declares a mutable WASM global
+  (`int`, `bool`, `string` — default 128 bytes) or a typed record
+  (`type user_t` + `state user: user_t` with fields).
+- `onclick="<expr>"` supports `count++`, `count = 0`, `user.age++`,
+  `user.admin = true`.
+- `{state}` / `{state.field}` in any text is re-rendered from the state
+  on every render; SSR interpolates the initial value, so the first
+  paint already shows it (no flicker).
+- Strict typing: `if`/conditions require `bool`; unknown states/fields
+  are compile-time errors.
+- Clicks dispatch by widget id: the glue resolves `data-asx-id` (via
+  `closest`) and calls `handle_event(1, id, 0, 0, 0)`; the module's
+  switch runs only the matching action and marks the widget dirty
+  (`ui_dirty` → the glue re-renders).
 
 ## Components (`@@name`)
 
@@ -357,6 +372,41 @@ card:
 - The page block also gets an implicit label: `@@card` in `about_content`
   compiles to `about_content.wat` + `_main.wat` under
   `build/<page>.s.d/`, linked into the page's module.
+
+### Typed props
+
+A component can bind a global state by name with a type annotation:
+
+```nasm
+; src/app/page.s
+section .data
+    index_content:
+        @main p-8
+            type user_t
+                name: string
+                age: int
+                admin: bool
+            state user: user_t
+                name: "weslley"
+                age: 30
+                admin: false
+            @@usercard user: user_t
+        @end
+
+; src/components/usercard.s
+usercard:
+    @div bg-orange-500 p-4
+        @p text-white: "{user.name}"
+        @p text-white: "{user.age} anos"
+    @end
+```
+
+`@@usercard user: user_t` is validated at compile time: the state `user`
+must exist and be an object of type `user_t` (unknown states, scalar
+states and type mismatches are errors). Inside the component body,
+`{user.name}` / `{user.age}` interpolate the global state like anywhere
+else — the body is expanded before the compile pass, so states remain
+accessible and typed.
 
 ## Dynamic routes (`[id]` segments)
 
@@ -413,7 +463,8 @@ How it works:
 Each `@` block in a `page.s` goes through `build/tools/ui-compile` — a
 **pure-assembly preprocessor** (no Python):
 
-1. parses the block (tags, classes, params, children),
+1. parses the block (tags, classes, params, children, `state`/`type`
+   directives, `onclick` attributes, `{state.field}` interpolations),
 2. expands `@@component` calls from `src/components/`,
 3. emits one `.wat` file per component + a `_main.wat` (render + theme +
    event wiring) into `build/<page>.s.d/`,
@@ -437,8 +488,8 @@ The module exports (all framework-provided):
 | `slug_area`    | writable address where the glue stores the slug      |
 | `styles`       | base pointer of the 16-byte style records            |
 | `ssr_checksum` | FNV-1a of the canonical IR (see SSR below)           |
-| `set_count`/`get_count` | counter state accessors (hydration snapshot)  |
-| `handle_event` | (type, x, y, key) — clicks/mouse/keyboard dispatch   |
+| `set_count`/`get_count` | legacy counter accessors (optional — new modules carry state via directives) |
+| `handle_event` | (type, widget_id, x, y, key) — clicks dispatch by `data-asx-id`; mouse/keyboard by coords |
 
 `/_asx/glue.js` is a virtual file served by the framework (no entry in
 `static/`): it instantiates the module, applies the theme, syncs the widget
@@ -458,21 +509,22 @@ compute. The page also carries:
 - `data-asx-checksum="<hex>"` — FNV-1a over the canonical IR (records
   with the text_ptr field skipped + strings in record order);
 - `<script type="application/asx-state">` — the hydration snapshot
-  (minimal render state, e.g. `{"root":"index","count":0}`);
+  (minimal render state, e.g. `{"root":"index"}`; initial state values
+  live in the module itself, emitted from the `state` directives);
 - `<style data-asx-base>` — the global reset + theme (`body` background
   and color), served WITH the HTML so the first paint is already the
   final layout; the glue skips injecting its own copy when this tag is
   present (no layout flicker on reload).
 
 ```html
-<div id="ui" data-asx-root="index" data-asx-checksum="587c9529"
+<div id="ui" data-asx-root="index" data-asx-checksum="474ea74f"
      data-modules="/index.wasm">
   <div data-asx-id="0" style="position:relative;display:flex;...">
     <span data-asx-id="1" style="...">OLHA O MACACO</span>
     ...
   </div>
 </div>
-<script type="application/asx-state">{"root":"index","count":0}</script>
+<script type="application/asx-state">{"root":"index"}</script>
 <script type="module" src="/_asx/glue.js"></script>
 ```
 
@@ -487,7 +539,8 @@ During **HYDRATING** the glue:
 1. locates the root by `data-asx-root` (falls back to client rendering
    when absent);
 2. parses the snapshot and restores the render state **before** the first
-   render (`set_count`);
+   render (legacy `set_count`; new modules carry the initial state in
+   the module, emitted from the `state` directives);
 3. recomputes the checksum in the module (`ssr_checksum`) and compares it
    with `data-asx-checksum` — a mismatch logs an `ASX Hydration Error`
    with the server/client hashes;
