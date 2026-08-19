@@ -107,7 +107,8 @@ asmx_listen:
     ; print the colored startup banner (log.asm)
     mov rdi, r12
     call log_banner
-    ; fall through to requests
+    jmp requests              ; fall through explicitly - the .port_retry
+                              ; label below must NOT be on this path
 .port_retry:
     ; the port is taken: colored message, then retry on port+1
     mov rdi, r12
