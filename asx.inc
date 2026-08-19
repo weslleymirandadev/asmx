@@ -95,8 +95,11 @@ extern asx_req_body_len
 extern asx_req_get
 extern asx_req_has
 extern http_req_method
-; SSR helper (asx/ssr.asm)
+; SSR helper (asx/ssr.asm) + server state (asx/content.asm)
 extern ssr_render
+extern asx_send_content
+extern asx_ssr_set_state
+extern asx_ssr_state_reset
 ; Helpers (asx/helpers.asm)
 extern strcpy_adv
 ; JSON domain (json/*.asm) - available through the json. object macros
@@ -406,10 +409,39 @@ section .MIDDLEWARE exec progbits align=16
 ; one .wat per component + a _main.wat. The Makefile links them with
 ; the framework wasm lib -> static/<route>/page.wasm (root:
 ; static/index.wasm), which the glue instantiates and renders.
+; asx_send_content also resolves the ssr.state slots (server values
+; injected into the SSR HTML + hydration snapshot).
 ; ----------------------------------------------------------------------
 %macro res.content 1
     mov rdi, %1%+_shell
-    call asx_send_html
+    call asx_send_content
+%endmacro
+
+; ----------------------------------------------------------------------
+; ssr.state "KEY", VALUE - inject a server-side value into the SSR
+; render of the page (server state in the snapshot, ROADMAP item 3).
+;   section .SERVER
+;   get_home:
+;       ; count = database()
+;       ssr.state "count", rax     ; into the HTML + snapshot
+;       res.content index_content
+;       asx.next
+; The value must be an integer (int/bool states). The glue restores it
+; via the module's set_<key> export BEFORE the first render, so the
+; first paint already shows the server value (no flicker). Works with
+; any state declared in the @ block (state count: int = 0).
+; ----------------------------------------------------------------------
+%macro ssr.state 2
+    %ifstr %1
+        jmp %%skip
+    %%key: db %1, 0
+    %%skip:
+        lea rdi, [%%key]
+    %else
+        lea rdi, [%1]
+    %endif
+    mov rsi, %2
+    call asx_ssr_set_state
 %endmacro
 
 %macro json.parse 2
