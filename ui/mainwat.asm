@@ -140,10 +140,11 @@ emit_handle_event:
     inc r12
     jmp .find_btn
 .have_btn:
-    ; The glue filters clicks by the button's REAL DOM rect
-    ; (getBoundingClientRect) and only calls handle_event(1, ...) for
-    ; clicks inside a button, with coords relative to it. So the wasm
-    ; hit test accepts anything: 0 <= x/y < 32767.
+    ; The glue resolves the click target via data-asmx-role="button"
+    ; (ev.target.closest, set by the SSR pass or by the glue in CSR) and
+    ; only calls handle_event(1, ...) for clicks on a real button, with
+    ; coords relative to it. So the wasm hit test accepts anything:
+    ; 0 <= x/y < 32767.
     mov r13d, 0                 ; bx = 0
     mov r14d, 0                 ; by = 0
     mov r15d, 32767             ; bw = 32767
