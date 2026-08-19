@@ -61,7 +61,8 @@ socket_bind_listen:
     lea rsi, [server_addr]
     mov rdx, server_addr_len
     syscall
-    check_syscall bind_error
+    test rax, rax
+    js .bind_fail               ; EADDRINUSE etc. -> -1, the core retries port+1
 
     ; Listen for connections
     mov rax, SYS_listen
@@ -71,4 +72,10 @@ socket_bind_listen:
     check_syscall listen_error
 
     mov rax, rdi      ; return server_fd
+    ret
+.bind_fail:
+    ; close the socket of the failed bind (avoids fd leaks across retries)
+    mov rax, SYS_close
+    syscall                       ; rdi still = server_fd
+    mov rax, -1
     ret
