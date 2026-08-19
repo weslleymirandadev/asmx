@@ -668,3 +668,137 @@ tw_scale:
     dq s_sc_f7_12, 420
     dq s_sc_f11_12, 660
 tw_scale_end:
+
+; ----------------------------------------------------------------------
+; LAYOUT/STYLE CLASSES (beyond colors/sizes/spacing)
+; tw_flags: exact-name flags (flex, flex-col, items-*, justify-*, hidden...)
+; tw_round: rounded-* -> px (255 = rounded-full)
+; tw_fontw: font-* -> weight (font-bold -> 700)
+; tw_shadow: shadow-* -> level 1..6
+; ----------------------------------------------------------------------
+s_flex      db "flex", 0
+s_flex_col  db "flex-col", 0
+s_flex_row  db "flex-row", 0
+s_flex_wrap db "flex-wrap", 0
+s_flex_1    db "flex-1", 0
+s_items_start db "items-start", 0
+s_items_center db "items-center", 0
+s_items_end db "items-end", 0
+s_items_stretch db "items-stretch", 0
+s_justify_start db "justify-start", 0
+s_justify_center db "justify-center", 0
+s_justify_end db "justify-end", 0
+s_justify_between db "justify-between", 0
+s_justify_around db "justify-around", 0
+s_justify_evenly db "justify-evenly", 0
+s_hidden    db "hidden", 0
+s_text_center db "text-center", 0
+s_text_right db "text-right", 0
+s_text_justify db "text-justify", 0
+s_uppercase db "uppercase", 0
+s_lowercase db "lowercase", 0
+s_italic    db "italic", 0
+s_underline db "underline", 0
+s_line_through db "line-through", 0
+s_no_underline db "no-underline", 0
+s_bold      db "font-bold", 0
+s_semibold  db "font-semibold", 0
+
+tw_flags:
+    dq s_flex, F_FLEX
+    dq s_flex_col, F_FLEX | F_FLEXCOL
+    dq s_flex_row, F_FLEX
+    dq s_flex_wrap, F_FLEX | F_WRAP
+    dq s_flex_1, F_GROW
+    dq s_items_start, 0
+    dq s_items_center, F_ITEMSC
+    dq s_items_end, F_ITEMSE
+    dq s_items_stretch, 0
+    dq s_justify_start, 0
+    dq s_justify_center, F_JUSTC
+    dq s_justify_end, F_JUSTE
+    dq s_justify_between, F_JUSTB
+    dq s_justify_around, F_JUSTB
+    dq s_justify_evenly, F_JUSTB
+    dq s_hidden, F_HIDDEN
+    dq s_text_center, F_CENTER
+    dq s_text_right, F_RIGHT
+    dq s_text_justify, 0
+    dq s_uppercase, F_UPPER
+    dq s_lowercase, 0
+    dq s_italic, F_ITALIC
+    dq s_underline, F_UNDER
+    dq s_line_through, F_UNDER
+    dq s_no_underline, 0
+    dq s_bold, F_BOLD
+    dq s_semibold, F_BOLD
+tw_flags_end:
+
+s_round_none db "rounded-none", 0
+s_round_sm   db "rounded-sm", 0
+s_round_base db "rounded", 0
+s_round_md   db "rounded-md", 0
+s_round_lg   db "rounded-lg", 0
+s_round_xl   db "rounded-xl", 0
+s_round_2xl  db "rounded-2xl", 0
+s_round_3xl  db "rounded-3xl", 0
+s_round_full db "rounded-full", 0
+
+tw_round:
+    dq s_round_none, 0
+    dq s_round_sm, 2
+    dq s_round_base, 4
+    dq s_round_md, 6
+    dq s_round_lg, 8
+    dq s_round_xl, 12
+    dq s_round_2xl, 16
+    dq s_round_3xl, 24
+    dq s_round_full, 255
+tw_round_end:
+
+s_fw_thin db "font-thin", 0
+s_fw_light db "font-light", 0
+s_fw_normal db "font-normal", 0
+s_fw_medium db "font-medium", 0
+s_fw_bold db "font-bold", 0
+s_fw_extrabold db "font-extrabold", 0
+s_fw_black db "font-black", 0
+
+tw_fontw:
+    dq s_fw_thin, 100
+    dq s_fw_light, 300
+    dq s_fw_normal, 400
+    dq s_fw_medium, 500
+    dq s_fw_bold, 700
+    dq s_fw_extrabold, 800
+    dq s_fw_black, 900
+tw_fontw_end:
+
+s_sh_sm db "shadow-sm", 0
+s_sh_base db "shadow", 0
+s_sh_md db "shadow-md", 0
+s_sh_lg db "shadow-lg", 0
+s_sh_xl db "shadow-xl", 0
+s_sh_2xl db "shadow-2xl", 0
+
+tw_shadow:
+    dq s_sh_sm, 1
+    dq s_sh_base, 2
+    dq s_sh_md, 3
+    dq s_sh_lg, 4
+    dq s_sh_xl, 5
+    dq s_sh_2xl, 6
+tw_shadow_end:
+
+; prefixes for numeric classes (strncmp match on the prefix)
+s_gap_prefix   db "gap-", 0
+s_px_prefix    db "px-", 0
+s_py_prefix    db "py-", 0
+s_pt_prefix    db "pt-", 0
+s_pb_prefix    db "pb-", 0
+s_h_prefix     db "h-", 0
+s_border_prefix db "border-", 0
+s_border       db "border", 0
+s_opacity_prefix db "opacity-", 0
+s_rounded_prefix db "rounded-", 0
+s_font_prefix  db "font-", 0
