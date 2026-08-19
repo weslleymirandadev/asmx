@@ -17,6 +17,7 @@
   i32.const 21
   i32.const 24
   i32.const 35
+  i32.const 255
   local.get $parent
   call $view)
 
@@ -48,6 +49,7 @@
   i32.const 249
   i32.const 115
   i32.const 22
+  i32.const 255
   local.get $parent
   call $view
   local.set $b
