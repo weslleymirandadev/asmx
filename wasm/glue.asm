@@ -27,6 +27,11 @@ section .data
             db '  let e = instance.exports;', 10
             db '  const mem = () => e.memory.buffer;', 10
             db '  const dec = new TextDecoder();', 10
+            db '  // dynamic route slug: "/profile/joao" -> "joao" (last path', 10
+            db '  // segment). Written into the wasm memory (slug_area) so the', 10
+            db '  // module can read it; "{slug}" in any text is replaced below.', 10
+            db '  const slug = location.pathname.split("/").filter(Boolean).pop() || "";', 10
+            db '  if (e.slug_area) { const sa = e.slug_area(); const b = new TextEncoder().encode(slug); new Uint8Array(mem()).set(b, sa); new Uint8Array(mem())[sa + b.length] = 0; }', 10
             db '  const hex = (v) => "#" + ((v>>16)&255).toString(16).padStart(2,"0") + ((v>>8)&255).toString(16).padStart(2,"0") + (v&255).toString(16).padStart(2,"0");', 10
             db '  const st = document.createElement("style");', 10
             db '  st.textContent = "*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;font-family:ui-sans-serif,system-ui,sans-serif;padding:48px 24px}";', 10
@@ -51,7 +56,8 @@ section .data
             db '        if (el.style.cssText !== css) el.style.cssText = css;', 10
             db '        const tp = v.getUint32(o+16,true);', 10
             db '        let end = tp; while (v.getUint8(end) !== 0) end++;', 10
-            db '        const txt = dec.decode(new Uint8Array(buf, tp, end-tp));', 10
+            db '        let txt = dec.decode(new Uint8Array(buf, tp, end-tp));', 10
+            db '        if (txt.includes("{slug}")) txt = txt.split("{slug}").join(slug);', 10
             db '        if (el.textContent !== txt) el.textContent = txt;', 10
             db '      } else if (type === 2) {', 10
             db '        if (!el || el.tagName !== "CANVAS") { el = document.createElement("canvas"); el.width = w; el.height = h; els[i] = el; }', 10
