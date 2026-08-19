@@ -24,7 +24,7 @@ section .data
             db '  ui.style.cssText = "position:relative;width:100%;max-width:720px;margin:0 auto";', 10
             db '  const mod = (ui.dataset.modules || "/app.wasm").split(",")[0];', 10
             db '  const { instance } = await WebAssembly.instantiateStreaming(fetch(mod));', 10
-            db '  const e = instance.exports;', 10
+            db '  let e = instance.exports;', 10
             db '  const mem = () => e.memory.buffer;', 10
             db '  const dec = new TextDecoder();', 10
             db '  const hex = (v) => "#" + ((v>>16)&255).toString(16).padStart(2,"0") + ((v>>8)&255).toString(16).padStart(2,"0") + (v&255).toString(16).padStart(2,"0");', 10
@@ -97,10 +97,32 @@ section .data
             db '      if (e.ui_dirty && e.ui_dirty()) { e.render(); syncDOM(); }', 10
             db '    });', 10
             db '  }', 10
+            db '  // hot reload: EventSource with auto-reconnect; each open', 10
+            db '  // means the server (re)started, so re-check the wasm bytes', 10
+            db '  let snap = new Uint8Array(await fetch(mod + "?t=" + Date.now(), { cache: "no-store" }).then((r) => r.arrayBuffer()));', 10
+            db '  const check = async () => {', 10
+            db '    try {', 10
+            db '      const r = await fetch(mod + "?t=" + Date.now(), { cache: "no-store" });', 10
+            db '      const b = new Uint8Array(await r.arrayBuffer());', 10
+            db '      if (b.byteLength !== snap.byteLength || b.some((v, i) => v !== snap[i])) {', 10
+            db '        snap = b;', 10
+            db '        const { instance: nxt } = await WebAssembly.instantiate(b, {});', 10
+            db '        e = nxt.exports;', 10
+            db '        if (e.init) e.init();', 10
+            db '        if (e.render) e.render();', 10
+            db '        syncDOM();', 10
+            db '      }', 10
+            db '    } catch (err) {}', 10
+            db '  };', 10
+            db '  new EventSource("/_asmx/events").onopen = () => check();', 10
             db '};', 10
             db 'boot();', 0
     glue_js_len equ $ - glue_js - 1
     glue_ct db "Content-Type: text/javascript", 13, 10, 0
+    sse_ct  db "Content-Type: text/event-stream", 13, 10, 0
+    sse_cc  db "Cache-Control: no-cache", 13, 10, 0
+    sse_body db "retry: 2000", 10, 10, "data: ok", 10, 10
+    sse_body_len equ $ - sse_body
 
 section .text
 
@@ -154,6 +176,83 @@ wasm_glue_serve:
     mov rdi, [client_fd]
     lea rsi, [glue_js]
     mov rdx, glue_js_len
+    syscall
+    test rax, rax
+    js .err
+
+    xor rax, rax
+    jmp .out
+.err:
+    mov rax, -1
+.out:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; ----------------------------------------------------------------------
+; sse_serve() - hot-reload event stream. Answers with a tiny
+; event-source body (retry: 2000ms) and closes: the server is
+; single-threaded, so it can not hold the connection; the browser's
+; EventSource reconnects on its own. Each reconnect means the server
+; (re)started - the glue.js uses onopen to re-check the wasm bytes.
+; ----------------------------------------------------------------------
+global sse_serve
+sse_serve:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+
+    ; build header in resp_buf
+    lea r15, [resp_buf]
+    call write_status_line        ; HTTP/1.1 200 OK\r\n
+    mov rdi, r15
+    lea rsi, [sse_ct]
+    call strcpy_adv               ; Content-Type: text/event-stream
+    mov r15, rax
+    mov rdi, r15
+    lea rsi, [sse_cc]
+    call strcpy_adv               ; Cache-Control: no-cache
+    mov r15, rax
+    mov rdi, r15
+    lea rsi, [cl_prefix]
+    call strcpy_adv               ; Content-Length: 
+    mov r15, rax
+    mov rdi, sse_body_len
+    lea rsi, [itoa_buf]
+    call itoa
+    mov rsi, rax
+    lea rdx, [itoa_buf + 11]
+    sub rdx, rsi
+    mov rdi, r15
+    call memcpy_adv
+    mov r15, rax
+    mov rdi, r15
+    lea rsi, [crlf2]
+    mov rdx, 4
+    call memcpy_adv               ; end of headers
+    mov r15, rax
+
+    ; write header
+    lea rax, [resp_buf]
+    sub r15, rax
+    mov rax, SYS_write
+    mov rdi, [client_fd]
+    lea rsi, [resp_buf]
+    mov rdx, r15
+    syscall
+    test rax, rax
+    js .err
+
+    ; write body
+    mov rax, SYS_write
+    mov rdi, [client_fd]
+    lea rsi, [sse_body]
+    mov rdx, sse_body_len
     syscall
     test rax, rax
     js .err
