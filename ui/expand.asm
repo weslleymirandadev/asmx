@@ -1,17 +1,17 @@
 ; =============================================================================
-; expand.asm - @comp component expansion (src/components/*.s, {param} args)
+; expand.asm - @@ component expansion (src/components/*.s, {param} args)
 ; =============================================================================
 ;
-; A line like  @comp <name> key="value" ...  inside an @ DSL block is
+; A line like  @@ <name> key="value" ...  inside an @ DSL block is
 ; replaced at compile time by the <name>: block of src/components/<name>.s:
-;   - every line is re-indented to the @comp line level (nesting works);
+;   - every line is re-indented to the @@ line level (nesting works);
 ;   - {key} placeholders are substituted by the given values.
-; Nested @comp lines inside a component expand recursively (depth-limited).
+; Nested @@ lines inside a component expand recursively (depth-limited).
 ; The in_buf is rewritten in place (in_len grows/shrinks).
 
 ; ----------------------------------------------------------------------
 ; expand_block(rdi = start_off, rsi = end_off) -> rax = new block end.
-; Scans the in_buf block [start, end) line by line; every @comp line is
+; Scans the in_buf block [start, end) line by line; every @@ line is
 ; spliced. Arg pointers into the in_buf stay valid until the splice.
 ; ----------------------------------------------------------------------
 expand_block:
@@ -62,7 +62,7 @@ expand_block:
     inc rbx
     jmp .indent
 .ind_done:
-    ; depth pop: line indent < open @comp indent -> left the component
+    ; depth pop: line indent < open @@ indent -> left the component
 .pop:
     cmp qword [comp_depth], 0
     je .no_pop
@@ -75,26 +75,17 @@ expand_block:
     dec qword [comp_depth]
     jmp .pop
 .no_pop:
-    ; "@comp"? (strncmp clobbers rdx - only the result matters here)
+    ; "@@"? (custom component instantiation: @@card key="value")
     cmp rbx, r15
     jge .next_line
     cmp byte [in_buf + rbx], '@'
     jne .next_line
-    lea rdi, [in_buf + rbx + 1]
-    lea rsi, [s_comp_tag]
-    mov rdx, 4
-    call strncmp
-    test rax, rax
-    jnz .next_line
-    ; the char after "comp" must be a space/tab (or the line is not @comp)
-    lea r8, [rbx + 5]
+    lea r8, [rbx + 1]
     cmp r8, r15
     jge .next_line
-    mov al, [in_buf + r8]
-    cmp al, ' '
-    je .is_comp
-    cmp al, 9
+    cmp byte [in_buf + r8], '@'
     jne .next_line
+    lea r8, [rbx + 2]           ; the component name starts here
 .is_comp:
     cmp qword [comp_depth], MAX_COMP_DEPTH
     jge .too_deep
@@ -109,16 +100,16 @@ expand_block:
     mov r14, rax
     mov rbx, rdx                ; comp block end (callee-saved)
     ; build the expanded block: re-indent + {param} substitution
-    mov rdi, r12                ; @comp line start
+    mov rdi, r12                ; @@ line start
     mov rsi, r14                ; comp content start
     mov rdx, rbx                ; comp content end
     call build_expand
-    ; splice the expanded block over the @comp line [r12, r15)
+    ; splice the expanded block over the @@ line [r12, r15)
     mov rdi, r12
     mov rsi, r15
     call splice_in              ; rax = delta
     add r13, rax                ; block end moved
-    ; push the @comp indent (depth tracking), then re-scan the inserted lines
+    ; push the @@ indent (depth tracking), then re-scan the inserted lines
     mov rcx, r12
 .ind2:
     cmp byte [in_buf + rcx], '@'
@@ -487,9 +478,9 @@ find_comp_block:
     call die
 
 ; ----------------------------------------------------------------------
-; build_expand(rdi = @comp line start, rsi = comp content start,
+; build_expand(rdi = @@ line start, rsi = comp content start,
 ;              rdx = comp content end) - builds expand_buf/expand_len:
-;   delta = @comp line indent - comp base indent (clamped to 0)
+;   delta = @@ line indent - comp base indent (clamped to 0)
 ;   each comp line: (delta) spaces + the line with {key} substituted
 ; ----------------------------------------------------------------------
 build_expand:
@@ -498,11 +489,11 @@ build_expand:
     push r13
     push r14
     push r15
-    mov r12, rdi                ; @comp line start
+    mov r12, rdi                ; @@ line start
     mov r13, rsi                ; comp content start
     mov r14, rdx                ; comp content end
     mov qword [expand_len], 0
-    ; @comp line indent
+    ; @@ line indent
     mov r15, r12
 .ic:
     cmp byte [in_buf + r15], '@'
@@ -511,7 +502,7 @@ build_expand:
     jmp .ic
 .ic_done:
     mov rax, r15
-    sub rax, r12                ; @comp indent
+    sub rax, r12                ; @@ indent
     ; comp base indent (the first content line)
     mov r15, r13
 .cb:
@@ -646,7 +637,7 @@ copy_subst:
 
 ; ----------------------------------------------------------------------
 ; arg_lookup(rdi = key ptr, rsi = key len) -> rax = val ptr, rdx = val len
-; (or -1 if the key is not among the @comp args)
+; (or -1 if the key is not among the @@ args)
 ; ----------------------------------------------------------------------
 arg_lookup:
     push rbx
@@ -689,7 +680,7 @@ arg_lookup:
 ; ----------------------------------------------------------------------
 ; splice_in(rdi = line start, rsi = line end) - replaces [start, end) plus
 ; its newline with expand_buf/expand_len. Returns rax = delta (may be
-; negative when the component is smaller than the @comp line).
+; negative when the component is smaller than the @@ line).
 ; ----------------------------------------------------------------------
 splice_in:
     push rbx
@@ -714,7 +705,7 @@ splice_in:
     lea rsi, [in_buf + rbx]     ; src
     mov rdx, rax                ; n
     call memmove_back
-    ; copy the expanded block over the @comp line
+    ; copy the expanded block over the @@ line
     lea rdi, [in_buf + r12]     ; r12 is an offset, not a pointer
     lea rsi, [expand_buf]
     mov rdx, [expand_len]
