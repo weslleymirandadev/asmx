@@ -180,3 +180,83 @@ s_mt          db "mt-", 0
 s_mb          db "mb-", 0
 s_m           db "m-", 0
 s_w           db "w-", 0
+
+; ----------------------------------------------------------------------
+; SSR + hydration (ui/ssr.asm): the shell embeds the FULL rendered HTML
+; (server-rendered widget tree) with stable ids + a first-render checksum
+; + the state snapshot. The glue hydrates this DOM instead of rebuilding.
+; ----------------------------------------------------------------------
+s_ssr_div1  db '<div id="ui" data-asmx-root="', 0
+s_ssr_ck1   db '" data-asmx-checksum="', 0
+s_ssr_mod1  db '" data-modules="/', 0
+s_ssr_sufi  db '.wasm">', 0
+s_ssr_sufp  db '/page.wasm">', 0
+s_ssr_close db '</div>', 0
+s_ssr_snap1 db '<script type="application/asmx-state">{"root":"', 0
+s_ssr_snap2 db '","count":0}</script>', 0
+s_ssr_id1   db '<div data-asmx-id="', 0
+s_ssr_role  db '" data-asmx-role="button', 0
+s_ssr_sty   db '" style="', 0
+s_ssr_gt    db '">', 0
+s_ssr_span1 db '<span data-asmx-id="', 0
+s_ssr_span2 db '</span>', 0
+s_ssr_cv1   db '<canvas data-asmx-id="', 0
+s_ssr_cv_w  db '" width="', 0
+s_ssr_cv_h  db '" height="', 0
+s_ssr_cv2   db '"></canvas>', 0
+
+; --- inline CSS (must mirror wasm/glue.asm's cssText builders) ---
+s_css_v_base  db "position:relative;display:flex;flex-direction:", 0
+s_css_items   db ";align-items:", 0
+s_css_just    db ";justify-content:", 0
+s_css_semi    db ";", 0
+s_css_col     db "column", 0
+s_css_row     db "row", 0
+s_css_center  db "center", 0
+s_css_fs      db "flex-start", 0
+s_css_fe      db "flex-end", 0
+s_css_sb      db "space-between", 0
+s_css_bg      db "background:#", 0
+s_css_pad     db "padding:", 0
+s_css_px_sp   db "px ", 0
+s_css_px_semi db "px;", 0
+s_css_px0     db "px 0 ", 0
+s_css_gap     db "gap:", 0
+s_css_mg      db "margin:", 0
+s_css_rad     db "border-radius:", 0
+s_css_rad_full db "border-radius:9999px;", 0
+s_css_bd1     db "border:", 0
+s_css_bd2     db "px solid rgba(255,255,255,.2);", 0
+s_css_op      db "opacity:", 0
+s_css_zero_dot db "0.", 0
+s_css_zero    db "0", 0
+s_css_one     db "1;", 0
+s_css_sh      db "box-shadow:0 8px 24px rgba(0,0,0,.35);", 0
+s_css_w       db "width:", 0
+s_css_btn     db "width:auto;align-self:flex-start;cursor:pointer;", 0
+s_css_100     db "width:100%;", 0
+s_css_mh      db "min-height:", 0
+s_css_l_base  db "display:block;font-size:", 0
+s_css_l_col   db "px;color:#", 0
+s_css_fw      db "font-weight:", 0
+s_css_ta_c    db "text-align:center;", 0
+s_css_ta_r    db "text-align:right;", 0
+s_css_ta_j    db "text-align:justify;", 0
+s_css_tt      db "text-transform:uppercase;", 0
+s_css_it      db "font-style:italic;", 0
+s_css_un      db "text-decoration:underline;", 0
+s_css_lh      db "line-height:1.4;", 0
+s_css_cv_base db "display:block;width:", 0
+s_css_cv_h    db "height:", 0
+s_css_cv_end  db "px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);", 0
+
+; --- HTML escapes for SSR text ---
+s_esc_amp  db "&amp;", 0
+s_esc_lt   db "&lt;", 0
+s_esc_gt   db "&gt;", 0
+s_esc_quot db "&quot;", 0
+s_esc_apos db "&#39;", 0
+
+; --- state exports (mainwat.asm emit_handle_event) ---
+s_ev_cnt_get db '(func (export "get_count") (result i32) global.get $count)', 10, 0
+s_ev_cnt_set db '(func (export "set_count") (param i32) local.get 0 global.set $count)', 10, 0
