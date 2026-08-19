@@ -124,10 +124,23 @@ serialize:
     mov [rdi + 2], ax
     mov eax, [r15 + N_AY]
     mov [rdi + 4], ax
+    ; w/h: for views (type 0) store the CLASS width/height (N_W/N_H, 0 =
+    ; auto/flex) - the glue does flexbox; for canvas keep the laid-out
+    ; size. labels don't use w/h.
+    mov eax, [r13]
+    cmp eax, 2
+    je .size_canvas
+    mov eax, [r15 + N_W]
+    mov [rdi + 6], ax
+    mov eax, [r15 + N_H]
+    mov [rdi + 8], ax
+    jmp .size_done
+.size_canvas:
     mov eax, [r15 + N_AW]
     mov [rdi + 6], ax
     mov eax, [r15 + N_AH]
     mov [rdi + 8], ax
+.size_done:
     ; cor
     mov eax, [r13]
     cmp eax, 2
@@ -142,8 +155,10 @@ serialize:
     mov eax, [r15 + N_BG]
     jmp .have_col
 .col_view_def:
-    mov eax, 0x151823
-    jmp .have_col
+    ; NO background: transparent (alpha 0) - only explicit bg-* or the
+    ; theme root paints a view
+    xor eax, eax
+    jmp .have_col_t
 .col_label:
     cmp dword [r15 + N_COLOR], -1
     je .col_label_def
@@ -172,6 +187,14 @@ serialize:
     mov eax, ecx
     mov [rdi + 14], al
     mov byte [rdi + 15], 255
+    jmp .col_alpha_done
+.have_col_t:
+    ; transparent: r=g=b=0, alpha=0
+    mov byte [rdi + 12], 0
+    mov byte [rdi + 13], 0
+    mov byte [rdi + 14], 0
+    mov byte [rdi + 15], 0
+.col_alpha_done:
     ; parent
     mov [rdi + 20], r14d
     ; font size
