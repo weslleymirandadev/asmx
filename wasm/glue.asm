@@ -121,7 +121,7 @@ section .data
     glue_ct db "Content-Type: text/javascript", 13, 10, 0
     sse_ct  db "Content-Type: text/event-stream", 13, 10, 0
     sse_cc  db "Cache-Control: no-cache", 13, 10, 0
-    sse_body db "retry: 2000", 10, 10, "data: ok", 10, 10
+    sse_body db "retry: 250", 10, 10, "data: ok", 10, 10
     sse_body_len equ $ - sse_body
 
 section .text
