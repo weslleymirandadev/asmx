@@ -403,3 +403,93 @@
   i32.const 1
   i32.sub
 )
+
+;; strcpy(dst, src) - copies bytes up to and including the null terminator
+(func $strcpy (param $dst i32) (param $src i32)
+  (local $i i32) (local $b i32)
+  block $end
+  loop $l
+    local.get $src
+    local.get $i
+    i32.add
+    i32.load8_u
+    local.set $b
+    ;; store8 wants [addr, value] - addr first, value on top
+    local.get $dst
+    local.get $i
+    i32.add
+    local.get $b
+    i32.store8
+    local.get $b
+    i32.eqz
+    br_if $end
+    local.get $i
+    i32.const 1
+    i32.add
+    local.set $i
+    br $l
+  end
+  end
+)
+
+;; fmt(dst, prefix, plen, val, suffix) - mounts dst = prefix + itoa(val) + suffix
+;; used by the compiler for interpolated int/bool texts
+(func $fmt (param $dst i32) (param $prefix i32) (param $plen i32) (param $val i32) (param $suffix i32)
+  (local $pos i32) (local $n i32)
+  local.get $dst
+  local.get $prefix
+  call $strcpy
+  local.get $dst
+  local.get $plen
+  i32.add
+  local.set $pos
+  local.get $val
+  local.get $pos
+  call $itoa
+  local.set $n
+  local.get $pos
+  local.get $n
+  i32.add
+  local.set $pos
+  local.get $pos
+  local.get $suffix
+  call $strcpy
+)
+
+;; fmt_str(dst, prefix, plen, str, suffix) - mounts dst = prefix + str + suffix
+;; used by the compiler for interpolated string texts
+(func $fmt_str (param $dst i32) (param $prefix i32) (param $plen i32) (param $str i32) (param $suffix i32)
+  (local $pos i32)
+  local.get $dst
+  local.get $prefix
+  call $strcpy
+  local.get $dst
+  local.get $plen
+  i32.add
+  local.set $pos
+  block $end
+  loop $l
+    local.get $str
+    i32.load8_u
+    i32.eqz
+    br_if $end
+    ;; store8 wants [addr, value] - addr first, value on top
+    local.get $pos
+    local.get $str
+    i32.load8_u
+    i32.store8
+    local.get $str
+    i32.const 1
+    i32.add
+    local.set $str
+    local.get $pos
+    i32.const 1
+    i32.add
+    local.set $pos
+    br $l
+  end
+  end
+  local.get $pos
+  local.get $suffix
+  call $strcpy
+)
