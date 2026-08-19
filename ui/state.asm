@@ -1826,6 +1826,8 @@ check_interp:
     cmp rax, -1
     je .err
     mov r8d, eax                ; state idx
+    push r8                     ; field_lookup clobbers r8 (strncmp uses
+                                ; r8b) - save the state idx on the stack
     ; field lookup
     lea rdi, [r13 + r11]        ; field ptr (in_buf offset)
     mov rsi, r10
@@ -1837,6 +1839,7 @@ check_interp:
     je .err
     mov r9d, eax                ; field idx
     mov r15d, r10d              ; close_pos
+    pop r8                      ; restore the state idx
 .ci_register:
     ; 2nd interpolation in the suffix?
     lea rax, [r13 + r15 + 1]    ; suffix start
