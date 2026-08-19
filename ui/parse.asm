@@ -813,6 +813,49 @@ parse_classes:
     ret
 
 ; ----------------------------------------------------------------------
+; tw_lookup(rdi = ptr, rsi = len, rdx = table, rcx = table_end) -> value or -1
+; Generic table lookup: entries are (dq name_ptr, dq value).
+; ----------------------------------------------------------------------
+tw_lookup:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi              ; token ptr
+    mov r13, rsi              ; token len
+    mov r14, rdx              ; table
+    mov r15, rcx              ; table end
+.loop:
+    cmp r14, r15
+    jge .none
+    mov rdi, [r14]
+    call strlen
+    cmp rax, r13
+    jne .next
+    mov rdi, [r14]
+    mov rsi, r12
+    mov rdx, r13
+    call strncmp
+    test rax, rax
+    jz .found
+.next:
+    add r14, 16
+    jmp .loop
+.found:
+    mov rax, [r14 + 8]
+    jmp .done
+.none:
+    mov rax, -1
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; ----------------------------------------------------------------------
 ; class_apply(rdi = base, rsi = token, rdx = token len)
 ; ----------------------------------------------------------------------
 class_apply:
@@ -823,6 +866,196 @@ class_apply:
     mov r12, rdi
     mov r13, rsi
     mov r14, rdx
+    ; ---- exact-name tables (flags / rounded / font-weight / shadow) ----
+    lea rdx, [tw_flags]
+    lea rcx, [tw_flags_end]
+    call tw_lookup
+    cmp rax, -1
+    je .not_flags
+    or [r12 + N_FLAGS], eax
+    jmp .done
+.not_flags:
+    lea rdx, [tw_round]
+    lea rcx, [tw_round_end]
+    call tw_lookup
+    cmp rax, -1
+    je .not_round
+    mov [r12 + N_RADIUS], eax
+    jmp .done
+.not_round:
+    lea rdx, [tw_fontw]
+    lea rcx, [tw_fontw_end]
+    call tw_lookup
+    cmp rax, -1
+    je .not_fontw
+    mov [r12 + N_WEIGHT], eax
+    cmp eax, 600
+    jl .done
+    or dword [r12 + N_FLAGS], F_BOLD
+    jmp .done
+.not_fontw:
+    lea rdx, [tw_shadow]
+    lea rcx, [tw_shadow_end]
+    call tw_lookup
+    cmp rax, -1
+    je .not_shadow
+    mov [r12 + N_SHADOW], eax
+    jmp .done
+.not_shadow:
+    ; ---- numeric prefixes ----
+    ; gap-<n>
+    cmp r14d, 4
+    jb .not_gap
+    lea rdi, [r13]
+    lea rsi, [s_gap_prefix]
+    mov rdx, 4
+    call strncmp
+    test rax, rax
+    jnz .not_gap
+    lea rdi, [r13 + 4]
+    mov rsi, r14
+    sub rsi, 4
+    call scale_lookup
+    mov [r12 + N_GAP], eax
+    jmp .done
+.not_gap:
+    ; px-<n>
+    cmp r14d, 3
+    jb .not_px
+    lea rdi, [r13]
+    lea rsi, [s_px_prefix]
+    mov rdx, 3
+    call strncmp
+    test rax, rax
+    jnz .not_px
+    lea rdi, [r13 + 3]
+    mov rsi, r14
+    sub rsi, 3
+    call scale_lookup
+    mov [r12 + N_PX], eax
+    jmp .done
+.not_px:
+    ; py-<n>
+    cmp r14d, 3
+    jb .not_py
+    lea rdi, [r13]
+    lea rsi, [s_py_prefix]
+    mov rdx, 3
+    call strncmp
+    test rax, rax
+    jnz .not_py
+    lea rdi, [r13 + 3]
+    mov rsi, r14
+    sub rsi, 3
+    call scale_lookup
+    mov [r12 + N_PY], eax
+    jmp .done
+.not_py:
+    ; pt-<n>
+    cmp r14d, 3
+    jb .not_pt
+    lea rdi, [r13]
+    lea rsi, [s_pt_prefix]
+    mov rdx, 3
+    call strncmp
+    test rax, rax
+    jnz .not_pt
+    lea rdi, [r13 + 3]
+    mov rsi, r14
+    sub rsi, 3
+    call scale_lookup
+    mov [r12 + N_PT], eax
+    jmp .done
+.not_pt:
+    ; pb-<n>
+    cmp r14d, 3
+    jb .not_pb
+    lea rdi, [r13]
+    lea rsi, [s_pb_prefix]
+    mov rdx, 3
+    call strncmp
+    test rax, rax
+    jnz .not_pb
+    lea rdi, [r13 + 3]
+    mov rsi, r14
+    sub rsi, 3
+    call scale_lookup
+    mov [r12 + N_PB], eax
+    jmp .done
+.not_pb:
+    ; h-<n> (height; "h-screen" -> 720 via scale screen)
+    cmp r14d, 2
+    jb .not_h
+    lea rdi, [r13]
+    lea rsi, [s_h_prefix]
+    mov rdx, 2
+    call strncmp
+    test rax, rax
+    jnz .not_h
+    lea rdi, [r13 + 2]
+    mov rsi, r14
+    sub rsi, 2
+    call scale_lookup
+    mov [r12 + N_H], eax
+    jmp .done
+.not_h:
+    ; border-<n> or border-<color> (width via scale; color via palette)
+    cmp r14d, 7
+    jb .not_borderp
+    lea rdi, [r13]
+    lea rsi, [s_border_prefix]
+    mov rdx, 7
+    call strncmp
+    test rax, rax
+    jnz .not_borderp
+    lea rdi, [r13 + 7]
+    mov rsi, r14
+    sub rsi, 7
+    call palette_lookup
+    cmp rax, -1
+    je .border_scale
+    mov [r12 + N_BORDER_COLOR], eax
+    jmp .done
+.border_scale:
+    lea rdi, [r13 + 7]
+    mov rsi, r14
+    sub rsi, 7
+    call scale_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_BORDER], eax
+    jmp .done
+.not_borderp:
+    ; border (width 1)
+    cmp r14d, 6
+    jne .not_border
+    lea rdi, [r13]
+    lea rsi, [s_border]
+    mov rdx, 6
+    call strncmp
+    test rax, rax
+    jnz .not_border
+    mov dword [r12 + N_BORDER], 1
+    jmp .done
+.not_border:
+    ; opacity-<n>
+    cmp r14d, 8
+    jb .not_opacity
+    lea rdi, [r13]
+    lea rsi, [s_opacity_prefix]
+    mov rdx, 8
+    call strncmp
+    test rax, rax
+    jnz .not_opacity
+    lea rdi, [r13 + 8]
+    mov rsi, r14
+    sub rsi, 8
+    call atoi_n
+    cmp rax, 100
+    jg .done
+    mov [r12 + N_OPACITY], eax
+    jmp .done
+.not_opacity:
     ; bg-<color>
     cmp r14d, 3
     jb .not_bg
@@ -1002,6 +1235,48 @@ palette_lookup:
     push r14
     mov r12, rdi
     mov r13, rsi
+    ; direct hex: #rgb or #rrggbb (Tailwind arbitrary colors)
+    cmp byte [r12], '#'
+    jne .named
+    cmp r13, 4
+    je .hex3
+    cmp r13, 7
+    je .hex6
+    jmp .none
+.hex3:
+    ; #rgb -> 0xrrggbb (each nibble doubled): process digits left->right,
+    ; shifting the accumulator left each position
+    xor eax, eax
+    mov ecx, 1
+.h3l:
+    movzx edx, byte [r12 + rcx]
+    call hex_nib
+    cmp edx, -1
+    je .none
+    shl eax, 8
+    mov r8d, edx
+    shl r8d, 4
+    or eax, r8d
+    or eax, edx
+    inc rcx
+    cmp rcx, 4
+    jne .h3l
+    jmp .done
+.hex6:
+    xor eax, eax
+    mov ecx, 1
+.h6l:
+    movzx edx, byte [r12 + rcx]
+    call hex_nib
+    cmp edx, -1
+    je .none
+    shl eax, 4
+    or eax, edx
+    inc rcx
+    cmp rcx, 7
+    jne .h6l
+    jmp .done
+.named:
     lea r14, [tw_colors]
 .loop:
     cmp r14, tw_colors_end
@@ -1029,6 +1304,26 @@ palette_lookup:
     pop r13
     pop r12
     pop rbx
+    ret
+
+; hex_nib(rdx = ascii) -> edx = 0..15 or -1
+hex_nib:
+    cmp dl, '0'
+    jb .bad
+    cmp dl, '9'
+    ja .hexlet
+    sub dl, '0'
+    ret
+.hexlet:
+    or dl, 0x20              ; tolower
+    cmp dl, 'a'
+    jb .bad
+    cmp dl, 'f'
+    ja .bad
+    sub dl, 'a' - 10
+    ret
+.bad:
+    mov edx, -1
     ret
 
 size_lookup:
