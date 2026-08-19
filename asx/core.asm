@@ -25,6 +25,7 @@ extern accept_error
 extern read_error
 extern server_fd, client_fd, asx_handler
 extern buffer, route, resp_status
+extern asx_ssr_state_reset
 extern log_banner, log_bind_retry, log_bind_giveup, log_request, clock_start
 
 section .bss
@@ -205,8 +206,10 @@ requests:
     call http_parse_headers
 
     ; Reset the response status for this request (router may set 404
-    ; for the not-found route on the previous one)
+    ; for the not-found route on the previous one) and the server state
+    ; table (ssr.state values must not leak between requests)
     mov qword [resp_status], 200
+    call asx_ssr_state_reset
 
     ; Dispatch to the user handler (never returns - handler jmps to requests)
     mov rax, [asx_handler]
