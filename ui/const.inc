@@ -42,7 +42,7 @@
 %define MAX_STACK    32
 %define MAX_RECORDS  128
 
-; @comp components (expand.asm)
+; @@ components (expand.asm)
 %define MAX_ARGS        16
 %define ARG_ENTRY_SIZE  32      ; key_ptr, key_len, val_ptr, val_len (dq each)
 %define MAX_COMP_DEPTH  16
