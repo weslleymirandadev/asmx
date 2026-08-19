@@ -322,6 +322,18 @@ serialize:
 .no_text:
     mov dword [rdi + 16], 0
 .next:
+    ; dyn flag in record byte 25 (1 = interpolated text). The wasm record
+    ; carries the same flag (emit.asm) so BOTH ssr_checksum sides skip
+    ; the string - the interpolated value is runtime data (ssr.state may
+    ; override it), not part of the canonical IR.
+    mov edi, [r13 + 4]          ; node idx (rec_order entry)
+    call dyn_find
+    cmp rax, -1
+    je .next_nodyn
+    imul rax, r12, 32
+    lea rdi, [blob_buf + rax + 24]
+    mov byte [rdi + 25], 1
+.next_nodyn:
     inc r12
     jmp .loop
 .err_blob:
