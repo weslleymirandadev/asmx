@@ -26,11 +26,15 @@ extern route            ; current request path (copied by core.asm)
 extern http_get_method_idx
 extern http_serve_static
 extern strcmp
+extern strncmp
+extern strlen
 extern asmx_send_status
 extern resp_status
 extern requests
 extern wasm_glue_serve
 extern sse_serve
+extern slug_buf
+extern slug_len
 
 section .data
     nf_route_path db "/__not_found", 0
@@ -53,6 +57,13 @@ route_dispatch:
     call strcmp               ; clobbers rdi/rsi/rcx - r12/r13 safe
     test rax, rax
     jz .found
+    ; dynamic route? pattern like "/profile/[id]" - the slug segment
+    ; (between '[' and ']') matches any non-empty path segment
+    mov rdi, route
+    mov rsi, [r12]
+    call route_match_dynamic  ; rax = 1 match (slug in slug_buf), 0 no
+    test rax, rax
+    jnz .found
     add r12, 48
     jmp .loop
 .found:
@@ -142,3 +153,118 @@ route_dispatch:
     pop r13
     pop r12
     jmp requests
+
+; ----------------------------------------------------------------------
+; route_match_dynamic(rdi = path, rsi = pattern) -> rax = 1 match / 0 no
+; Pattern: "/profile/[id]" - the "[...]" segment matches any non-empty
+; path segment. On a match the slug value is copied to slug_buf (null
+; terminated) and slug_len is set. Only the FIRST bracket pair is used;
+; the pattern may have a suffix after "]" (e.g. "/blog/[id]/edit").
+; ----------------------------------------------------------------------
+global route_match_dynamic
+route_match_dynamic:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi              ; path
+    mov r13, rsi              ; pattern
+    ; find '[' in pattern -> prefix = [0, r14)
+    xor r14, r14
+.pf_scan:
+    mov al, [r13 + r14]
+    test al, al
+    jz .no_match              ; no '[' -> not a dynamic pattern
+    cmp al, '['
+    je .pf_found
+    inc r14
+    jmp .pf_scan
+.pf_found:
+    ; find ']' after it -> suffix = [r15, ...) (may be empty)
+    lea r15, [r13 + r14 + 1]
+.sf_scan:
+    mov al, [r15]
+    test al, al
+    jz .no_match              ; no ']' -> malformed pattern
+    cmp al, ']'
+    je .sf_found
+    inc r15
+    jmp .sf_scan
+.sf_found:
+    inc r15                   ; suffix starts after ']'
+    ; path must start with the prefix
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    call strncmp
+    test rax, rax
+    jnz .no_match
+    ; path must end with the suffix (if any)
+    mov rdi, r15
+    call strlen               ; suffix len
+    mov rbx, rax              ; suffix len (rbx callee-saved)
+    mov rdi, r12
+    call strlen               ; path len
+    mov rcx, rax              ; path len
+    ; slug = path[prefix_len .. path_len - suffix_len), must be non-empty
+    mov rax, rcx
+    sub rax, r14              ; path_len - prefix_len
+    sub rax, rbx              ; - suffix_len = slug len
+    test rax, rax
+    jle .no_match
+    cmp rax, 255
+    jg .no_match              ; slug too big for slug_buf
+    ; check the suffix at path end (only if non-empty)
+    test rbx, rbx
+    jz .have_suf
+    lea rdi, [r12 + rcx]
+    sub rdi, rbx              ; path + path_len - suffix_len
+    mov rsi, r15
+    mov rdx, rbx
+    call strncmp
+    test rax, rax
+    jnz .no_match
+.have_suf:
+    ; strncmp clobbered rax/rcx - recompute the slug length
+    mov rdi, r12
+    call strlen               ; path len (rax)
+    sub rax, r14              ; - prefix_len
+    sub rax, rbx              ; - suffix_len = slug len
+    ; a slug with a '.' would be a static asset (e.g. "/profile/page.wasm")
+    ; - reject so the static fallback serves the file instead
+    mov rcx, rax
+    lea rdx, [r12 + r14]      ; slug start (rdx dead after strncmp)
+.slug_dot:
+    test rcx, rcx
+    jz .have_slug
+    cmp byte [rdx + rcx - 1], '.'
+    je .no_match
+    dec rcx
+    jmp .slug_dot
+.have_slug:
+    ; copy the slug into slug_buf (rbx = slug start, rbx no longer
+    ; needed for the suffix length)
+    mov [slug_len], rax
+    lea rbx, [r12 + r14]      ; slug start
+    xor rcx, rcx
+.cp:
+    cmp rcx, [slug_len]
+    jge .cp_done
+    mov al, [rbx + rcx]
+    mov [slug_buf + rcx], al
+    inc rcx
+    jmp .cp
+.cp_done:
+    mov byte [slug_buf + rcx], 0
+    mov rax, 1
+    jmp .out
+.no_match:
+    xor rax, rax
+.out:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
