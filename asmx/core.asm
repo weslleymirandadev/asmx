@@ -36,6 +36,8 @@ section .data
                               ; <10ms after connect; 300ms just kills
                               ; stale/preconnect sockets fast so the
                               ; next refresh waits at most ~0.3s
+    clear_seq db 27, '[', '2', 'J', 27, '[', 'H'   ; ANSI clear screen + home
+    clear_seq_len equ $ - clear_seq
 
 %define MAX_PORT 65535
 
@@ -96,6 +98,13 @@ asmx_listen:
     cmp rax, -1
     je .port_retry
     mov [server_fd], rax
+
+    ; clear the terminal so only the banner shows
+    mov rax, SYS_write
+    mov rdi, 1
+    lea rsi, [clear_seq]
+    mov rdx, clear_seq_len
+    syscall
 
     ; print the colored startup banner (log.asm)
     mov rdi, r12
