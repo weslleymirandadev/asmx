@@ -30,10 +30,12 @@ extern asmx_send_status
 extern resp_status
 extern requests
 extern wasm_glue_serve
+extern sse_serve
 
 section .data
     nf_route_path db "/__not_found", 0
     glue_path     db "/_asmx/glue.js", 0
+    events_path   db "/_asmx/events", 0
 
 section .text
 
@@ -75,6 +77,18 @@ route_dispatch:
     pop r12
     jmp requests
 .not_found:
+    ; framework virtual file: /_asmx/events - the hot-reload event stream
+    ; (EventSource; answers + closes, the browser reconnects on its own)
+    lea rdi, [events_path]
+    lea rsi, [route]
+    call strcmp
+    test rax, rax
+    jnz .glue_check
+    call sse_serve
+    pop r13
+    pop r12
+    jmp requests
+.glue_check:
     ; framework virtual file: /_asmx/glue.js (the WASM UI renderer) -
     ; no public/ entry needed, the glue is part of the framework
     lea rdi, [glue_path]
