@@ -203,6 +203,13 @@ emit_handle_event:
 .have_off:
     mov r12, rax                ; tp
     ; --- emit (the $count global lives in the module header) ---
+    ; state accessors for hydration: the glue restores the snapshot
+    ; count BEFORE the first render (set_count) so the first paint is
+    ; exactly what the SSR produced
+    lea rdi, [s_ev_cnt_get]
+    call out_main_str
+    lea rdi, [s_ev_cnt_set]
+    call out_main_str
     lea rdi, [s_ev_head]
     call out_main_str
     mov rdi, r13                ; bx
