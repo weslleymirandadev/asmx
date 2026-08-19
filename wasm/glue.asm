@@ -64,7 +64,6 @@ section .data
  db '  if (e.ui_theme_bg) document.body.style.background = hex(e.ui_theme_bg());', 10
  db '  if (e.ui_theme_text) document.body.style.color = hex(e.ui_theme_text());', 10
  db '  const els = [];', 10
- db '  const isBtn = [];', 10
  db '  // map the SSR DOM by data-asmx-id (stable compiler-generated ids).', 10
  db '  // hydration REUSES these nodes - no structural DOM change unless a', 10
  db '  // node is missing or its tag type diverges (partial re-render).', 10
@@ -148,7 +147,10 @@ section .data
  db '        if (el.style.cssText !== css) el.style.cssText = css;', 10
  db '        if (hh) { if (el.style.minHeight !== hh + "px") el.style.minHeight = hh + "px"; }', 10
  db '      }', 10
- db '      isBtn[i] = role === 1;', 10
+ db '      // buttons carry data-asmx-role="button" (SSR emits it; CSR sets', 10
+ db '      // it here) so the click handler can resolve the target with', 10
+ db '      // ev.target.closest instead of scanning every widget rect', 10
+ db '      if (role === 1) el.setAttribute("data-asmx-role", "button");', 10
  db '      const pe = (parent >= 0 && els[parent]) ? els[parent] : ui;', 10
  db '      if (el.parentNode !== pe) pe.appendChild(el);', 10
  db '    }', 10
@@ -189,22 +191,20 @@ section .data
             db '  }', 10
             db '  if (e.handle_event) {', 10
             db '    const rp = () => ui.getBoundingClientRect();', 10
-            db '    // click coordinates are sent RELATIVE to the button DOM', 10
-            db '    // rect when the target is a button (role 1), else relative', 10
-            db '    // to the ui root - matches the generated hit test (0..bw)', 10
+            db '    // the browser resolves the click target: only a real', 10
+            db '    // button (data-asmx-role="button") gets a click dispatch,', 10
+            db '    // with coordinates relative to it - no rect scanning', 10
+            db '    // over every widget. clicks outside any button are', 10
+            db '    // dropped (the wasm handler only acts on t==1 clicks)', 10
             db '    const fire = (t, ev) => {', 10
-            db '      let cx = ev.clientX - rp().left, cy = ev.clientY - rp().top;', 10
             db '      if (t === 1) {', 10
-            db '        for (let i = 0; i < els.length; i++) {', 10
-            db '          if (!isBtn[i] || !els[i]) continue;', 10
-            db '          const rc = els[i].getBoundingClientRect();', 10
-            db '          if (ev.clientX >= rc.left && ev.clientX <= rc.right && ev.clientY >= rc.top && ev.clientY <= rc.bottom) {', 10
-            db '            cx = ev.clientX - rc.left; cy = ev.clientY - rc.top;', 10
-            db '            break;', 10
-            db '          }', 10
-            db '        }', 10
+            db '        const btn = ev.target.closest ? ev.target.closest("[data-asmx-role=button]") : null;', 10
+            db '        if (!btn) return;', 10
+            db '        const rc = btn.getBoundingClientRect();', 10
+            db '        e.handle_event(1, ev.clientX - rc.left, ev.clientY - rc.top, 0);', 10
+            db '      } else {', 10
+            db '        e.handle_event(t, ev.clientX - rp().left, ev.clientY - rp().top, 0);', 10
             db '      }', 10
-            db '      e.handle_event(t, cx, cy, 0);', 10
             db '      if (e.ui_dirty && e.ui_dirty()) { e.render(); syncDOM(); }', 10
             db '    };', 10
             db '    ui.addEventListener("mousemove", (ev) => fire(0, ev));', 10
