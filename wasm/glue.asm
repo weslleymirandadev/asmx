@@ -45,7 +45,10 @@ section .data
  db '  // (<script type="application/asx-state">). Restored BEFORE the first', 10
  db '  // render so the first paint is exactly what the server produced.', 10
  db '  const snap = (() => { let s = null; for (const sc of document.scripts) { if (sc.type === "application/asx-state") { s = sc; break; } } try { return s ? JSON.parse(s.textContent) : {}; } catch (err) { return {}; } })();', 10
- db '  if (e.set_count && typeof snap.count === "number") e.set_count(snap.count);', 10
+ db '  // every snapshot key (except "root") maps to a set_<name> export', 10
+ db '  // (declarative states) or set_count (legacy): ssr.state values', 10
+ db '  // injected by the server are restored before the first render', 10
+ db '  for (const k in snap) { if (k === "root") continue; const fn = e["set_" + k]; if (typeof fn === "function") fn(snap[k]); }', 10
  db '  // dynamic route slug: "/profile/joao" -> "joao" (last path', 10
  db '  // segment). Written into the wasm memory (slug_area) so the', 10
  db '  // module can read it; "{slug}" in any text is replaced below.', 10
