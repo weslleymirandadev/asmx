@@ -6,7 +6,7 @@
 ;   GET /api/hello 200 (2ms)
 ;   GET / 200 (0ms)
 ;
-; Colors (ANSI): method+path bold, status green 2xx / yellow 3xx /
+; Colors (ANSI): method green, path bold, status green 2xx / yellow 3xx /
 ; red 4xx+, duration gray. No-op for the first request (nothing to log).
 ;
 ; Exported:
@@ -230,11 +230,15 @@ log_request:
     add rax, r13               ; total_ns
     mov r15, rax
 
-    ; BOLD method path SPACE [status color] STATUS RESET GRAY (ms) RESET NL
-    lea rsi, [ansi_bold]
+    ; GREEN method RESET BOLD path SPACE [status color] STATUS RESET GRAY (ms) RESET NL
+    lea rsi, [ansi_green]
     call write_ansi
     mov rdi, http_req_method
     call print_str
+    lea rsi, [ansi_reset]
+    call write_ansi
+    lea rsi, [ansi_bold]
+    call write_ansi
     lea rdi, [space]
     call print_str
     mov rdi, route
