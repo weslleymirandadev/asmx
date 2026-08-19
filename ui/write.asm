@@ -130,8 +130,8 @@ strcpy_l:
 ; get_ui_name(rdi = path) - page name in ui_name_buf/ui_name_len.
 ; Derives from the FULL PATH (not just the dir) so routes with the same
 ; dir name never collide:
-;   src/app/sobre/page.s       -> "sobre"          (data-modules="/sobre/page.wasm")
-;   src/app/admin/sobre/page.s -> "admin/sobre"    (data-modules="/admin/sobre/page.wasm")
+;   src/app/about/page.s       -> "about"          (data-modules="/about/page.wasm")
+;   src/app/admin/about/page.s -> "admin/about"    (data-modules="/admin/about/page.wasm")
 ;   src/app/page.s             -> "index"
 ; ----------------------------------------------------------------------
 get_ui_name:
