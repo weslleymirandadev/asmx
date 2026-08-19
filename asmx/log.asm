@@ -52,9 +52,11 @@ section .data
     banner_url  db 'http://localhost:', 0
     banner_post db 10, 0
     s_glue      db '/_asmx/glue.js', 0
-    br_err      db 'Error: port ', 0
+    br_err      db 'Error', 0
+    br_colon    db ': port ', 0
     br_mid      db ' already in use, starting server at ', 0
-    bg_err      db 'Error: no free port found up to ', 0
+    bg_err      db 'Error', 0
+    bg_colon    db ': no free port found up to ', 0
     br_nl       db 10, 0
 
 section .bss
@@ -72,20 +74,31 @@ global log_bind_retry
 log_bind_retry:
     push r12
     mov r12, rdi
+    ; "Error" (red bold), then normal color from the colon on
     lea rsi, [ansi_red]
     call write_ansi
     lea rsi, [ansi_bold]
     call write_ansi
     lea rdi, [br_err]
     call print_str
+    lea rsi, [ansi_reset]
+    call write_ansi
+    lea rdi, [br_colon]
+    call print_str
+    ; port number (red)
+    lea rsi, [ansi_red]
+    call write_ansi
+    lea rsi, [ansi_bold]
+    call write_ansi
     mov rdi, r12
     call print_itoa
     lea rsi, [ansi_reset]
     call write_ansi
-    lea rsi, [ansi_gray]
-    call write_ansi
     lea rdi, [br_mid]
     call print_str
+    ; retry port (red)
+    lea rsi, [ansi_red]
+    call write_ansi
     lea rsi, [ansi_bold]
     call write_ansi
     lea rdi, [r12 + 1]
@@ -105,12 +118,22 @@ global log_bind_giveup
 log_bind_giveup:
     push r12
     mov r12, rdi
+    ; "Error" (red bold), then normal color from the colon on
     lea rsi, [ansi_red]
     call write_ansi
     lea rsi, [ansi_bold]
     call write_ansi
     lea rdi, [bg_err]
     call print_str
+    lea rsi, [ansi_reset]
+    call write_ansi
+    lea rdi, [bg_colon]
+    call print_str
+    ; the ceiling port (red)
+    lea rsi, [ansi_red]
+    call write_ansi
+    lea rsi, [ansi_bold]
+    call write_ansi
     mov rdi, r12
     call print_itoa
     lea rsi, [ansi_reset]
