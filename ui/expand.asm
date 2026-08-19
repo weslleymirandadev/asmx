@@ -93,6 +93,11 @@ expand_block:
     lea rdi, [in_buf + r8]
     lea rsi, [in_buf + r15]     ; line end POINTER (r15 is an offset)
     call parse_comp_args
+    ; children on the next line? (rax > 0 = extra bytes beyond the @@ line)
+    test rax, rax
+    jz .no_chl_ext
+    add r15, rax
+.no_chl_ext:
     ; load src/components/<name>.s into comp_buf
     call load_component
     ; find the <name>: block inside comp_buf
@@ -226,6 +231,9 @@ parse_comp_args:
 .as_done:
     cmp r15, r13
     jge .args_done
+    ; ":" -> {children} content ("conteúdo" after the colon)
+    cmp byte [r15], ':'
+    je .children
     ; key = [r15, r8) until '='
     mov r8, r15
 .ks:
@@ -272,6 +280,126 @@ parse_comp_args:
     inc r15                     ; skip the closing quote
     jmp .arg_loop
 .args_done:
+    xor rax, rax                ; 0 = no next-line children consumed
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    ret
+.children:
+    ; "{children}" content: ':' then "text" - stored as a regular
+    ; arg_list entry with key "children" (the copy_subst placeholder
+    ; lookup finds it like any other {param})
+    inc r15                     ; skip ':'
+.ch_skip:
+    cmp r15, r13
+    jge .ch_next_line           ; ':' at line end -> children on the next line
+    mov al, [r15]
+    cmp al, ' '
+    je .ch_inc
+    cmp al, 9
+    jne .ch_q
+.ch_inc:
+    inc r15
+    jmp .ch_skip
+.ch_q:
+    cmp byte [r15], '"'
+    jne .err
+    inc r15
+    mov r8, r15                 ; value start
+.ch_vs:
+    cmp r8, r13
+    jge .err
+    cmp byte [r8], '"'
+    je .ch_done
+    inc r8
+    jmp .ch_vs
+.ch_done:
+    mov rax, [arg_count]
+    cmp rax, MAX_ARGS
+    jge .err
+    imul rcx, rax, ARG_ENTRY_SIZE
+    lea r10, [arg_list + rcx]
+    lea r11, [s_children]
+    mov [r10], r11              ; key ptr
+    mov qword [r10 + 8], 8      ; key len ("children")
+    mov [r10 + 16], r15         ; val ptr
+    mov r11, r8
+    sub r11, r15
+    mov [r10 + 24], r11         ; val len
+    inc qword [arg_count]
+    jmp .args_done
+.ch_next_line:
+    ; ':' at the END of the @@ line, no inline text:
+    ;   @@card ...:
+    ;       "children text"
+    ; The next line (if it is a "..." text line) becomes {children}.
+    ; Returns rax = offset of the end of that line (0 = nothing consumed),
+    ; so expand_block's splice covers both lines.
+    cmp byte [r13], 10
+    jne .chl_none               ; no newline after ':' -> nothing to grab
+    lea r14, [r13 + 1]          ; next line start
+    mov rax, [in_len]
+    lea rdx, [in_buf + rax]     ; file end ptr
+    cmp r14, rdx
+    jge .chl_none
+.chl_skip:
+    cmp r14, rdx
+    jge .chl_none
+    mov al, [r14]
+    cmp al, ' '
+    je .chl_inc
+    cmp al, 9
+    jne .chl_q
+.chl_inc:
+    inc r14
+    jmp .chl_skip
+.chl_q:
+    cmp byte [r14], '"'
+    jne .chl_none               ; next line is not a text line
+    inc r14
+    mov r15, r14                ; value start (reuse the args cursor)
+.chl_vs:
+    cmp r14, rdx
+    jge .err
+    cmp byte [r14], '"'
+    je .chl_done
+    inc r14
+    jmp .chl_vs
+.chl_done:
+    ; entry: key "children", val [r15, r14)
+    mov rax, [arg_count]
+    cmp rax, MAX_ARGS
+    jge .err
+    imul rcx, rax, ARG_ENTRY_SIZE
+    lea r10, [arg_list + rcx]
+    lea r11, [s_children]
+    mov [r10], r11              ; key ptr
+    mov qword [r10 + 8], 8      ; key len ("children")
+    mov [r10 + 16], r15         ; val ptr
+    mov r11, r14
+    sub r11, r15
+    mov [r10 + 24], r11         ; val len
+    inc qword [arg_count]
+    ; end of the children line = the new splice end
+    inc r14                     ; skip the closing quote
+.chl_end:
+    cmp r14, rdx
+    jge .chl_line_end
+    cmp byte [r14], 10
+    je .chl_line_end
+    inc r14
+    jmp .chl_end
+.chl_line_end:
+    mov rax, r14
+    sub rax, r13                ; offset relative to the '@@' line end
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    ret
+.chl_none:
+    xor rax, rax
     pop r15
     pop r14
     pop r13
@@ -433,6 +561,8 @@ find_comp_block:
     cmp al, '@'
     je .be_q
     cmp al, '"'
+    je .be_q
+    cmp al, '{'                 ; {children} placeholder line
     je .be_q
     jmp .be_done
 .be_q:
@@ -606,6 +736,54 @@ copy_subst:
     mov rsi, r14
     sub rsi, r12
     dec rsi                     ; name len
+    ; {children}? -> wrap the value in quotes (it becomes a text line)
+    cmp rsi, 8
+    jne .not_ch
+    push rdi
+    lea rsi, [s_children]
+    mov rdx, 8
+    call strncmp
+    pop rdi
+    test rax, rax
+    jnz .not_ch
+    mov rsi, 8                  ; rsi died in the strncmp - it is "children"
+    call arg_lookup             ; rax = val ptr, rdx = val len
+    cmp rax, -1
+    je .vcc_none                ; no children given - the line vanishes
+    mov r11, rax                ; val ptr (rax dies in the writes below)
+    mov rbx, rdx
+    mov r9, [expand_len]
+    ; expand to a label line:  @p: "value"
+    mov dword [expand_buf + r9], 0x203A7040   ; '@' 'p' ':' ' '
+    add qword [expand_len], 4
+    mov rax, [expand_len]
+    mov byte [expand_buf + rax], '"'
+    inc qword [expand_len]
+    xor r8, r8
+.vcc:
+    cmp r8, rbx
+    jge .vcc_done
+    mov cl, [r11 + r8]
+    mov r10, [expand_len]
+    mov [expand_buf + r10], cl
+    inc qword [expand_len]
+    inc r8
+    jmp .vcc
+.vcc_done:
+    mov rax, [expand_len]
+    mov byte [expand_buf + rax], '"'
+    inc qword [expand_len]
+    mov r12, r14
+    inc r12                     ; skip '}'
+    jmp .loop
+.vcc_none:
+    mov r12, r14                ; {children} without a value: the line
+    inc r12                     ; vanishes (skip past '}')
+    jmp .loop
+.not_ch:
+    mov rsi, r14                ; name len (rsi died in the strncmp above)
+    sub rsi, r12
+    dec rsi
     call arg_lookup             ; rax = val ptr, rdx = val len
     cmp rax, -1
     je .err
