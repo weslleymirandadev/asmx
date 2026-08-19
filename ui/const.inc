@@ -105,3 +105,69 @@
 ;   +0 flags u16 | +2 weight u8 | +3 align u8 | +4 gap u8 | +5 radius u8
 ;   +6 px u8 | +7 py u8 | +8 border u8 | +9 opacity u8 | +10 shadow u8
 ;   +11 role u8 (0 normal, 1 button) | +12..15 pad
+
+; ----------------------------------------------------------------------
+; declarative state (ui/state.asm): types, states, interpolations, actions
+; ----------------------------------------------------------------------
+%define MAX_TYPES     8
+%define MAX_FIELDS    16
+%define MAX_STATES    8
+%define MAX_DYN_TEXTS 16
+%define MAX_ACTIONS   16
+%define STR_DEFAULT_CAP 128
+
+; field kinds
+%define K_INT   0
+%define K_BOOL  1
+%define K_STR   2
+
+; type entry (32B)
+%define T_NAME_PTR    0
+%define T_NAME_LEN    8
+%define T_SIZE        16      ; u32 bytes total
+%define T_N_FIELDS    24      ; u32
+%define T_FIELDS_IDX  28      ; u32 (index into field_tab)
+%define TYPE_ENTRY    32
+
+; field entry (28B)
+%define F_NAME_PTR    0
+%define F_NAME_LEN    8
+%define F_OFFSET      16      ; u32 offset within the type
+%define F_KIND        20      ; u32 K_INT/K_BOOL/K_STR
+%define F_STR_CAP     24      ; u32 (strings only; 0 = STR_DEFAULT_CAP)
+%define FIELD_ENTRY   28
+
+; state entry (32B)
+%define S_NAME_PTR    0
+%define S_NAME_LEN    8
+%define S_TYPE_IDX    16      ; u32 (-1 = scalar)
+%define S_DATA_OFF    20      ; u32 offset in the state data area
+%define S_IS_OBJ      24      ; u32 0 = scalar, 1 = object
+%define S_KIND        28      ; u32 scalar kind (K_INT/K_BOOL) or -1 for objects
+%define STATE_ENTRY   32
+
+; dyn text entry (24B): a text widget with {state} / {state.field}
+%define D_NODE        0       ; u32 node idx
+%define D_STATE       4       ; u32 state idx
+%define D_FIELD       8       ; u32 field idx (-1 = scalar)
+%define D_PREFIX_LEN  12      ; u32 bytes before the placeholder
+%define D_SUFFIX_OFF  16      ; u32 offset of the suffix in in_buf
+%define D_SUFFIX_LEN  20      ; u32
+%define DYN_ENTRY     24
+
+; action entry (32B): an onclick on a button widget
+%define A_WIDGET      0       ; u32 record idx of the button view
+%define A_STATE       4       ; u32 state idx
+%define A_FIELD       8       ; u32 field idx (-1 = scalar)
+%define A_OP          12      ; u32 OP_*
+%define A_OPERAND     16      ; u32 int value / bool 0-1 / in_buf offset of str
+%define ACTION_ENTRY  32
+
+; action ops
+%define OP_INC        1
+%define OP_DEC        2
+%define OP_SET        3       ; = operand
+%define OP_ADD        4       ; += operand
+%define OP_SUB        5       ; -= operand
+%define OP_SET_TRUE   6
+%define OP_SET_FALSE  7
