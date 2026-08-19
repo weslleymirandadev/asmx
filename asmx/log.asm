@@ -51,6 +51,7 @@ section .data
     banner_mid  db ': listening on ', 0
     banner_url  db 'http://localhost:', 0
     banner_post db 10, 0
+    s_glue      db '/_asmx/glue.js', 0
 
 section .bss
     ts_start   resq 2      ; clock_gettime timespec: sec, nsec
@@ -111,6 +112,20 @@ log_request:
     push r15
     cmp qword [req_count], 0
     je .first
+    ; --- skip asset requests (glue.js / *.wasm): log routes only ---
+    lea rdi, [route]
+    call strlen
+    cmp rax, 5
+    jl .not_wasm
+    cmp dword [route + rax - 4], 0x6D736177   ; trailing "wasm"
+    je .first
+.not_wasm:
+    lea rdi, [route]
+    lea rsi, [s_glue]
+    mov rdx, 14
+    call strncmp
+    test rax, rax
+    jz .first
     ; --- log the request that just finished ---
     lea rdi, [ts_end]
     call clock_now
