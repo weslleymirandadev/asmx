@@ -200,17 +200,18 @@ section .data
             db '      if (t === 1) {', 10
             db '        const btn = ev.target.closest ? ev.target.closest("[data-asx-role=button]") : null;', 10
             db '        if (!btn) return;', 10
-            db '        const rc = btn.getBoundingClientRect();', 10
-            db '        e.handle_event(1, ev.clientX - rc.left, ev.clientY - rc.top, 0);', 10
+            db '        // the wasm dispatches actions by widget id', 10
+            db '        const id = parseInt(btn.dataset.asxId, 10);', 10
+            db '        e.handle_event(1, id, 0, 0, 0);', 10
             db '      } else {', 10
-            db '        e.handle_event(t, ev.clientX - rp().left, ev.clientY - rp().top, 0);', 10
+            db '        e.handle_event(t, -1, ev.clientX - rp().left, ev.clientY - rp().top, 0);', 10
             db '      }', 10
             db '      if (e.ui_dirty && e.ui_dirty()) { e.render(); syncDOM(); }', 10
             db '    };', 10
             db '    ui.addEventListener("mousemove", (ev) => fire(0, ev));', 10
             db '    ui.addEventListener("mousedown", (ev) => fire(1, ev));', 10
             db '    window.addEventListener("keydown", (ev) => {', 10
-            db '      e.handle_event(2, 0, 0, ev.keyCode || ev.which);', 10
+            db '      e.handle_event(2, -1, 0, 0, ev.keyCode || ev.which);', 10
             db '      if (e.ui_dirty && e.ui_dirty()) { e.render(); syncDOM(); }', 10
             db '    });', 10
             db '  }', 10
