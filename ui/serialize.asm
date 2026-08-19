@@ -221,6 +221,82 @@ serialize:
     test eax, eax
     jz .no_text
     mov ecx, [r15 + N_TEXT_LEN]
+    ; dyn text (declarative state interpolation)? resolve to the INITIAL
+    ; value so the SSR HTML and the first render match
+    push rdi
+    mov rdi, rbx                ; node idx
+    call dyn_find
+    pop rdi
+    cmp rax, -1
+    je .tx_plain
+    ; ---- dyn: prefix + initial value + suffix into the blob ----
+    imul rdx, rax, DYN_ENTRY
+    lea rdx, [dyn_tab + rdx]
+    ; cap check (template + margin for the value)
+    mov eax, [blob_len]
+    lea eax, [rax + rcx + 17]
+    cmp eax, BLOB_CAP
+    jg .err_blob
+    mov eax, [blob_len]
+    mov [rdi + 16], eax         ; text_offset
+    push rax                    ; original blob_len (for the padding)
+    lea r10, [blob_buf + rax]
+    mov r11, r10                ; write pos
+    ; prefix: template[0..D_PREFIX_LEN)
+    mov esi, [r15 + N_TEXT_PTR]
+    xor r8, r8
+.tx_dp:
+    cmp r8d, [rdx + D_PREFIX_LEN]   ; u32 compare! (r8 is 64-bit, the
+    jge .tx_dv                      ; field is u32 - a qword read would
+    mov al, [in_buf + rsi + r8]     ; swallow D_SUFFIX_OFF and loop forever)
+    mov [r11], al
+    inc r11
+    inc r8
+    jmp .tx_dp
+.tx_dv:
+    ; value
+    push rdx
+    mov edi, [rdx + D_STATE]    ; u32 fields!
+    mov esi, [rdx + D_FIELD]
+    mov rdx, r11
+    call state_value_copy       ; rax = len
+    add r11, rax
+    pop rdx
+    ; suffix: template[D_SUFFIX_OFF .. +D_SUFFIX_LEN)
+    mov esi, [r15 + N_TEXT_PTR]
+    add esi, [rdx + D_SUFFIX_OFF]
+    xor r8, r8
+.tx_ds:
+    cmp r8d, [rdx + D_SUFFIX_LEN]   ; u32 compare (same trap as .tx_dp)
+    jge .tx_dd
+    mov al, [in_buf + rsi + r8]
+    mov [r11], al
+    inc r11
+    inc r8
+    jmp .tx_ds
+.tx_dd:
+    mov byte [r11], 0
+    inc r11
+    ; pad with zeros up to template_len + 16: the runtime montage
+    ; rebuilds this text from the CURRENT value and may grow (multi-digit
+    ; ints, longer strings), so the pool reserves slack here
+    pop rcx                     ; original blob_len
+    mov eax, [r15 + N_TEXT_LEN]
+    add eax, 16
+    add ecx, eax                ; target = orig + template_len + 16
+    lea rax, [blob_buf]
+    mov edx, r11d
+    sub edx, eax                ; current blob len
+.tx_pad:
+    cmp edx, ecx
+    jge .tx_pad_done
+    mov byte [blob_buf + rdx], 0
+    inc edx
+    jmp .tx_pad
+.tx_pad_done:
+    mov [blob_len], edx
+    jmp .next
+.tx_plain:
     ; cap check
     mov eax, [blob_len]
     lea eax, [rax + rcx + 1]
