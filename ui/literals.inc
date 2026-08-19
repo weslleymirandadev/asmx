@@ -194,6 +194,12 @@ s_ssr_sufp  db '/page.wasm">', 0
 s_ssr_close db '</div>', 0
 s_ssr_snap1 db '<script type="application/asmx-state">{"root":"', 0
 s_ssr_snap2 db '","count":0}</script>', 0
+; global base css served WITH the SSR shell so the first paint already
+; has the reset + theme (no layout flicker when the glue boots later);
+; the glue skips injecting its own copy when this tag is present
+s_ssr_sty1  db '<style data-asmx-base>*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;font-family:ui-sans-serif,system-ui,sans-serif;padding:48px 24px;background:#', 0
+s_ssr_sty2  db ';color:#', 0
+s_ssr_sty3  db '}</style>', 0
 s_ssr_id1   db '<div data-asmx-id="', 0
 s_ssr_role  db '" data-asmx-role="button', 0
 s_ssr_sty   db '" style="', 0
