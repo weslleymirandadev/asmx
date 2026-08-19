@@ -57,7 +57,7 @@ The dev server logs one line per request:
 GET / 200 (66μs)
 GET /api/hello 200 (55μs)
 GET /missing 404 (61μs)
-POST /sobre 405 (54μs)
+POST /about 405 (54μs)
 ```
 
 With the CLI (`asmx dev`) it also watches sources, rebuilds on change and
@@ -79,7 +79,7 @@ myapp/
 │   └── wasm/              <- framework WAT lib + glue.js generator
 ├── static/                <- per-route UI wasm modules (served automatically)
 │   ├── index.wasm         <- root page module (src/app/page.s)
-│   └── sobre/page.wasm    <- /sobre module (src/app/sobre/page.s)
+│   └── about/page.wasm    <- /about module (src/app/about/page.s)
 ├── src/
 │   ├── main.asm           <- entry: listen + route dispatch
 │   ├── app/               <- your routes (see Routing)
@@ -95,7 +95,7 @@ The Makefile passes it to the assembler via `-DROUTE_PATH`.
 | file                              | route            | kind          |
 |-----------------------------------|------------------|---------------|
 | `src/app/page.s`                  | `/`              | HTML page     |
-| `src/app/sobre/page.s`            | `/sobre`         | HTML page     |
+| `src/app/about/page.s`            | `/about`         | HTML page     |
 | `src/app/api/hello/route.s`       | `/api/hello`     | API handler   |
 | `src/app/profile/[id]/page.s`     | `/profile/[id]`  | dynamic page  |
 | `src/app/not-found.s`             | (reserved)       | 404 page      |
@@ -254,27 +254,27 @@ build compiles each block into a serialized widget tree, an HTML shell, and
 a WASM module that renders it in the browser.
 
 ```nasm
-; src/app/sobre/page.s  ->  GET /sobre
+; src/app/about/page.s  ->  GET /about
 ; asmx.inc is pre-included by the Makefile
 
 section .data
-    sobre_content:
+    about_content:
         @main bg-black text-white min-h-screen p-8:
-            @h1 text-4xl: "Sobre o ASMX"
+            @h1 text-4xl: "About o ASMX"
             @p text-blue-500: "Fullstack Assembly + WebAssembly"
 
             @div bg-white w-10:
                 @h2 text-black font-bold: "Oi"
 
-            @@card cor="#f00" titulo="Blog" texto="hoje o blog é criminoso":
-                "Crimes"
+            @@card color="#f00" title="Blog":
+                "Today's blog is about..."
         @end
 
-page get_sobre
+page get_about
 
 section .SERVER
-get_sobre:
-    res.content sobre_content
+get_about:
+    res.content about_content
     asmx.next
 ```
 
@@ -354,8 +354,8 @@ card:
   `:` (`@@card ...: "texto"`) or as a following line.
 - Components nest recursively (up to depth 16) and any change to a component
   rebuilds every page (`COMP_SRCS` in the Makefile).
-- The page block also gets an implicit label: `@@card` in `sobre_content`
-  compiles to `sobre_content.wat` + `_main.wat` under
+- The page block also gets an implicit label: `@@card` in `about_content`
+  compiles to `about_content.wat` + `_main.wat` under
   `build/<page>.s.d/`, linked into the page's module.
 
 ## Dynamic routes (`[id]` segments)
@@ -631,7 +631,7 @@ only). MIME types and `Content-Length` are resolved from the file:
 
 ```
 static/index.wasm        ->  GET /index.wasm      (application/wasm)
-static/sobre/page.wasm   ->  GET /sobre/page.wasm (application/wasm)
+static/about/page.wasm   ->  GET /about/page.wasm (application/wasm)
 static/profile/[id]/page.wasm -> GET /profile/[id]/page.wasm
 static/style.css         ->  GET /style.css       (text/css)
 ```
@@ -710,7 +710,7 @@ brackets: `static/profile/[id]/page.wasm`.
 curl -v http://localhost:3000/
 curl http://localhost:3000/api/hello
 curl http://localhost:3000/profile/joao       # dynamic route
-curl http://localhost:3000/sobre/page.wasm    # static file
+curl http://localhost:3000/about/page.wasm    # static file
 curl -X POST http://localhost:3000/api/echo -d '{"x":1}'
 curl http://localhost:3000/nonexistent        # custom 404
 ```
