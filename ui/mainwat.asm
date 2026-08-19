@@ -57,6 +57,9 @@ emit_wat_main:
     call hex6_main
     lea rdi, [s_main_t4]
     call out_main_str
+    ; state: button + "count: N" text -> emit the handle_event func
+    ; at the end of the module (after every other export)
+    call emit_handle_event
     pop r15
     pop r14
     pop r13
@@ -90,6 +93,140 @@ hex6_main:
 .done:
     pop r13
     pop r12
+    ret
+
+; ----------------------------------------------------------------------
+; emit_handle_event - if the layout has a button (rec kind 1) AND a text
+; node starting with "count: ", emits the $count global + the exported
+; handle_event into main_buf: a click (t==1) inside the button rect
+; increments $count and rewrites the digit at text_ptr+7 ("count: N").
+; ----------------------------------------------------------------------
+emit_handle_event:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    ; --- find the button view record (rec_order kind 1) ---
+    xor r12, r12
+.find_btn:
+    cmp r12, [rec_count]
+    jge .done
+    imul rax, r12, 12
+    lea rbx, [rec_order + rax]
+    cmp dword [rbx], 1          ; kind 1 = button view
+    je .have_btn
+    inc r12
+    jmp .find_btn
+.have_btn:
+    mov eax, [rbx + 4]          ; node index
+    imul rax, rax, NODE_SIZE
+    lea rcx, [nodes + rax]      ; node ptr (rcx dies in strncmp later - ok)
+    mov r13d, [rcx + N_AX]      ; bx
+    mov r14d, [rcx + N_AY]      ; by
+    mov r15d, [rcx + N_AW]      ; bw
+    mov ebx, [rcx + N_AH]       ; bh (rbx survives strncmp below)
+    ; the button x/y are relative to its parent; the event x/y are
+    ; relative to the whole ui - walk the parent chain and add offsets
+    mov eax, [rcx + N_PARENT]
+.off_loop:
+    test eax, eax
+    js .off_done
+    imul rax, rax, NODE_SIZE
+    lea rdx, [nodes + rax]
+    add r13d, [rdx + N_AX]
+    add r14d, [rdx + N_AY]
+    mov eax, [rdx + N_PARENT]
+    jmp .off_loop
+.off_done:
+    ; --- find the "count: " text node ---
+    xor r12, r12
+.find_cnt:
+    cmp r12, [node_count]
+    jge .done
+    imul rax, r12, NODE_SIZE
+    lea rcx, [nodes + rax]
+    mov eax, [rcx + N_TEXT_PTR]
+    test eax, eax
+    jz .next_cnt
+    lea rdi, [in_buf + rax]
+    lea rsi, [s_count_prefix]
+    mov rdx, 7
+    call strncmp
+    test rax, rax
+    jz .have_cnt
+.next_cnt:
+    inc r12
+    jmp .find_cnt
+.have_cnt:
+    ; the node's N_TEXT_PTR is an in_buf offset - the wasm text address
+    ; must come from the RECORD's text_offset (blob-relative), like the
+    ; emit pass does: find the rec_order entry whose node == r12
+    xor rdx, rdx                ; rec idx (r15 keeps bw - no r15 here!)
+.rec_loop:
+    cmp rdx, [rec_count]
+    jge .done
+    imul rax, rdx, 12
+    lea r8, [rec_order + rax]
+    cmp dword [r8 + 4], r12d     ; rec node == the count node?
+    jne .rec_next
+    mov rax, rdx
+    imul rax, rax, 32
+    lea r8, [blob_buf + rax + 24]
+    mov eax, [r8 + 16]           ; text_offset (blob-relative)
+    mov rdi, rax
+    call wat_text_addr           ; rax = wasm addr, but str_cursor already
+                                 ; advanced by pool_len (.dd) - undo it:
+    mov ecx, [blob_len]
+    sub ecx, 24
+    mov edx, [rec_count]
+    imul edx, edx, 32
+    sub ecx, edx
+    sub rax, rcx                 ; rax = the real text address (148053...)
+    jmp .have_off
+.rec_next:
+    inc rdx
+    jmp .rec_loop
+.have_off:
+    mov r12, rax                ; tp
+    ; --- emit (the $count global lives in the module header) ---
+    lea rdi, [s_ev_head]
+    call out_main_str
+    mov rdi, r13                ; bx
+    call itoa_main
+    lea rdi, [s_ev_x_ge]
+    call out_main_str
+    lea rax, [r13 + r15]        ; bx + bw
+    mov rdi, rax
+    call itoa_main
+    lea rdi, [s_ev_x_lt]
+    call out_main_str
+    mov rdi, r14                ; by
+    call itoa_main
+    lea rdi, [s_ev_y_ge]
+    call out_main_str
+    lea rax, [r14 + rbx]        ; by + bh
+    mov rdi, rax
+    call itoa_main
+    lea rdi, [s_ev_y_lt]
+    call out_main_str
+    mov rdi, r12                ; tp
+    call itoa_main
+    lea rdi, [s_ev_dig]
+    call out_main_str
+    ; SPACE key handler (same increment, duplicated in the template)
+    lea rdi, [s_ev_ksp]
+    call out_main_str
+    mov rdi, r12                ; tp
+    call itoa_main
+    lea rdi, [s_ev_ksp2]
+    call out_main_str
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
     ret
 
 ; ----------------------------------------------------------------------
