@@ -67,6 +67,20 @@ emit_shell:
     lea rdi, [s_ssr_snap2]
     call out_str
     call ssr_nl
+    ; --- global base css (reset + theme) served with the SSR shell:
+    ; the first paint is already the final layout, the glue skips its
+    ; own copy when this tag is present (no flicker on reload) ---
+    lea rdi, [s_ssr_sty1]
+    call out_str
+    mov rdi, [theme_bg]
+    call ssr_hex6
+    lea rdi, [s_ssr_sty2]
+    call out_str
+    mov rdi, [theme_text]
+    call ssr_hex6
+    lea rdi, [s_ssr_sty3]
+    call out_str
+    call ssr_nl
     ; --- the glue script (hydration happens in the browser) ---
     lea rdi, [s_sh6]
     call out_str
