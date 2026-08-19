@@ -5,6 +5,14 @@
 ; Text -> span, canvas widget -> <canvas>) and forwards mouse/keyboard
 ; events to handle_event(). Apps never write UI code in page.s - the
 ; page template is just <div id="ui"> + <script src="/_asmx/glue.js">.
+;
+; SSR + hydration: when the served HTML carries data-asmx-root (the
+; ui-compile SSR pass renders the FULL widget tree server-side, with
+; stable data-asmx-id + data-asmx-checksum + a state snapshot), the glue
+; HYDRATES that DOM instead of rebuilding it: it maps the SSR nodes by
+; id, validates types, restores the snapshot state (set_count) and only
+; touches nodes that diverge. Phase machine: SSR -> HYDRATING ->
+; INTERACTIVE.
 ; wasm_glue_serve() -> sends 200 + text/javascript + body.
 
 %include "common/syscalls.inc"
@@ -27,6 +35,17 @@ section .data
  db '  let e = instance.exports;', 10
  db '  const mem = () => e.memory.buffer;', 10
  db '  const dec = new TextDecoder();', 10
+ db '  // ---- SSR + hydration (phase machine: SSR -> HYDRATING -> INTERACTIVE) ----', 10
+ db '  // SSR: the DOM came from the server (data-asmx-root on #ui). The glue', 10
+ db '  // assumes that DOM, validates it and connects behavior - it does NOT', 10
+ db '  // rebuild the page. HYDRATING: first sync reusing the SSR nodes.', 10
+ db '  // INTERACTIVE: normal reactive rendering may start.', 10
+ db '  let phase = ui.hasAttribute("data-asmx-root") ? "SSR" : "CSR";', 10
+ db '  // hydration snapshot: minimal render state produced by the SSR pass', 10
+ db '  // (<script type="application/asmx-state">). Restored BEFORE the first', 10
+ db '  // render so the first paint is exactly what the server produced.', 10
+ db '  const snap = (() => { let s = null; for (const sc of document.scripts) { if (sc.type === "application/asmx-state") { s = sc; break; } } try { return s ? JSON.parse(s.textContent) : {}; } catch (err) { return {}; } })();', 10
+ db '  if (e.set_count && typeof snap.count === "number") e.set_count(snap.count);', 10
  db '  // dynamic route slug: "/profile/joao" -> "joao" (last path', 10
  db '  // segment). Written into the wasm memory (slug_area) so the', 10
  db '  // module can read it; "{slug}" in any text is replaced below.', 10
@@ -40,6 +59,12 @@ section .data
  db '  if (e.ui_theme_text) document.body.style.color = hex(e.ui_theme_text());', 10
  db '  const els = [];', 10
  db '  const isBtn = [];', 10
+ db '  // map the SSR DOM by data-asmx-id (stable compiler-generated ids).', 10
+ db '  // hydration REUSES these nodes - no structural DOM change unless a', 10
+ db '  // node is missing or its tag type diverges (partial re-render).', 10
+ db '  const byId = new Map();', 10
+ db '  for (const el of ui.querySelectorAll("[data-asmx-id]")) byId.set(el.getAttribute("data-asmx-id"), el);', 10
+ db '  const tagFor = (type) => type === 1 ? "SPAN" : type === 2 ? "CANVAS" : "DIV";', 10
  db '  // flexbox layout: views are flex containers, texts flow', 10
  db '  // inside them. x/y from the module are the fallback size.', 10
  db '  const syncDOM = () => {', 10
@@ -53,6 +78,14 @@ section .data
  db '      const r = v.getUint8(o+12), g = v.getUint8(o+13), b = v.getUint8(o+14);', 10
  db '      const parent = v.getInt32(o+20,true);', 10
  db '      let el = els[i];', 10
+ db '      if (!el) el = byId.get(String(i)) || null;', 10
+ db '      const want = tagFor(type);', 10
+ db '      if (!el || el.tagName !== want) {', 10
+ db '        if (el) console.error("ASMX Hydration Error: node " + i + " structural mismatch expected <" + want.toLowerCase() + "> got <" + el.tagName.toLowerCase() + "> (re-created, subtree client-rendered)");', 10
+ db '        el = document.createElement(want.toLowerCase());', 10
+ db '        byId.set(String(i), el);', 10
+ db '      }', 10
+ db '      els[i] = el;', 10
  db '      const so = stBase + i*16;', 10
  db '      const flags = stBase ? v.getUint16(so,true) : 0;', 10
  db '      const weight = stBase ? v.getUint8(so+2) : 0;', 10
@@ -81,7 +114,6 @@ section .data
  db '      const items = (flags & 4) ? "center" : (flags & 8) ? "flex-end" : "flex-start";', 10
  db '      const just = (flags & 16) ? "center" : (flags & 32) ? "space-between" : (flags & 64) ? "flex-end" : "flex-start";', 10
  db '      if (type === 1) {', 10
- db '        if (!el || el.tagName !== "SPAN") { el = document.createElement("span"); els[i] = el; }', 10
  db '        const fs = v.getUint8(o+24) || 13;', 10
  db '        const col = "color:" + hex((r<<16)|(g<<8)|b) + ";";', 10
  db '        const fw = weight ? "font-weight:" + weight + ";" : "";', 10
@@ -95,12 +127,14 @@ section .data
  db '        let end = tp; while (v.getUint8(end) !== 0) end++;', 10
  db '        let txt = dec.decode(new Uint8Array(buf, tp, end-tp));', 10
  db '        if (txt.includes("{slug}")) txt = txt.split("{slug}").join(slug);', 10
- db '        if (el.textContent !== txt) el.textContent = txt;', 10
+ db '        if (el.textContent !== txt) {', 10
+ db '          if (phase === "HYDRATING" && !el.textContent.includes("{slug}")) console.error("ASMX Hydration Error: node " + i + " text mismatch server=" + JSON.stringify(el.textContent) + " client=" + JSON.stringify(txt) + " (fixed)");', 10
+ db '          el.textContent = txt;', 10
+ db '        }', 10
  db '      } else if (type === 2) {', 10
- db '        if (!el || el.tagName !== "CANVAS") { el = document.createElement("canvas"); el.width = w; el.height = h; els[i] = el; }', 10
- db '        el.style.cssText = "display:block;width:" + w + "px;height:" + h + "px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);";', 10
+ db '        const css = "display:block;width:" + w + "px;height:" + h + "px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);";', 10
+ db '        if (el.style.cssText !== css) el.style.cssText = css;', 10
  db '      } else {', 10
- db '        if (!el || el.tagName !== "DIV") { el = document.createElement("div"); els[i] = el; }', 10
  db '        // buttons (role 1) shrink to fit their label and', 10
  db '        // get a pointer cursor; plain views stretch 100%', 10
  db '        const ww = (w && w < 720) ? "width:" + w + "px;" : (role === 1 ? "width:auto;align-self:flex-start;cursor:pointer;" : "width:100%;");', 10
@@ -112,11 +146,26 @@ section .data
  db '      const pe = (parent >= 0 && els[parent]) ? els[parent] : ui;', 10
  db '      if (el.parentNode !== pe) pe.appendChild(el);', 10
  db '    }', 10
+ db '    // SSR leftovers: nodes the module no longer produces are removed', 10
+ db '    for (const [id, el] of byId) { const k = parseInt(id, 10); if (k >= n && el.parentNode) el.remove(); }', 10
  db '    for (let i = n; i < els.length; i++) { if (els[i]) { els[i].remove(); els[i] = null; } }', 10
  db '  };', 10
             db '  if (e.init) e.init();', 10
             db '  if (e.render) e.render();', 10
+            db '  if (phase === "SSR") phase = "HYDRATING";', 10
+            db '  // checksum: the server embeds data-asmx-checksum = FNV-1a over the', 10
+            db '  // canonical IR (records + strings). The module recomputes the same', 10
+            db '  // hash (ssr_checksum) over the records it produced (AFTER render', 10
+            db '  // populated the widget array). mismatch = the SSR DOM and this', 10
+            db '  // module disagree -> diagnostic; syncDOM repairs the diverging', 10
+            db '  // nodes one by one (partial recovery).', 10
+            db '  if (phase === "HYDRATING" && e.ssr_checksum && ui.dataset.asmxChecksum) {', 10
+            db '    const want = parseInt(ui.dataset.asmxChecksum, 16);', 10
+            db '    const got = e.ssr_checksum() >>> 0;', 10
+            db '    if (got !== want) console.error("ASMX Hydration Error: root=" + (ui.dataset.asmxRoot || "?") + " server checksum=" + ui.dataset.asmxChecksum + " client checksum=" + got.toString(16));', 10
+            db '  }', 10
             db '  syncDOM();', 10
+            db '  phase = "INTERACTIVE";', 10
             db '  if (e.frame && e.pixels) {', 10
             db '    const loop = () => {', 10
             db '      e.frame();', 10
@@ -161,13 +210,13 @@ section .data
             db '  }', 10
             db '  // hot reload: EventSource with auto-reconnect; each open', 10
             db '  // means the server (re)started, so re-check the wasm bytes', 10
-            db '  let snap = new Uint8Array(await fetch(mod + "?t=" + Date.now(), { cache: "no-store" }).then((r) => r.arrayBuffer()));', 10
+            db '  let snapBytes = new Uint8Array(await fetch(mod + "?t=" + Date.now(), { cache: "no-store" }).then((r) => r.arrayBuffer()));', 10
             db '  const check = async () => {', 10
             db '    try {', 10
             db '      const r = await fetch(mod + "?t=" + Date.now(), { cache: "no-store" });', 10
             db '      const b = new Uint8Array(await r.arrayBuffer());', 10
-            db '      if (b.byteLength !== snap.byteLength || b.some((v, i) => v !== snap[i])) {', 10
-            db '        snap = b;', 10
+            db '      if (b.byteLength !== snapBytes.byteLength || b.some((v, i) => v !== snapBytes[i])) {', 10
+            db '        snapBytes = b;', 10
             db '        const { instance: nxt } = await WebAssembly.instantiate(b, {});', 10
             db '        e = nxt.exports;', 10
             db '        if (e.init) e.init();', 10
