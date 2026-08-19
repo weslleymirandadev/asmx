@@ -13,6 +13,7 @@
 %include "ui/layout.asm"
 %include "ui/serialize.asm"
 %include "ui/emit.asm"
+%include "ui/ssr.asm"
 %include "ui/mainwat.asm"
 %include "ui/write.asm"
 %include "ui/out.asm"
