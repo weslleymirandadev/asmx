@@ -539,8 +539,8 @@ During **HYDRATING** the glue:
 1. locates the root by `data-asx-root` (falls back to client rendering
    when absent);
 2. parses the snapshot and restores the render state **before** the first
-   render (legacy `set_count`; new modules carry the initial state in
-   the module, emitted from the `state` directives);
+   render (every `set_<name>` export from the snapshot keys — declarative
+   states and ssr.state values; legacy `set_count` still works);
 3. recomputes the checksum in the module (`ssr_checksum`) and compares it
    with `data-asx-checksum` — a mismatch logs an `ASX Hydration Error`
    with the server/client hashes;
@@ -554,6 +554,53 @@ During **HYDRATING** the glue:
 So the browser never rebuilds the page: SSR produces the appearance,
 hydration connects the behavior. `curl` shows the full rendered UI even
 with JavaScript disabled.
+
+### Server state (`ssr.state`) — real data in the first paint
+
+By default the SSR shell renders the state's **initial value** (declared in
+the `state` directive). To inject a real value server-side, the page handler
+calls `ssr.state` before `res.content`:
+
+```nasm
+; src/app/page.s
+section .data
+    index_content:
+        @main p-8
+            state count: int = 0
+            @p text-2xl: "count: {count}"
+            @button onclick="count++": "CLICK HERE"
+        @end
+
+page get_home
+
+section .SERVER
+get_home:
+    ; count = database()
+    mov rax, 42
+    ssr.state "count", rax     ; inject into the HTML + hydration snapshot
+    res.content index_content
+    asx.next
+```
+
+`GET /` then serves `count: 42` in the SSR DOM **and**
+`{"root":"index","count":42}` in the snapshot. The glue restores the value
+via the module's `set_<name>` export **before** the first render, so the
+first paint is the server value — no flicker, no second render. Without
+any `ssr.state` call the page is served exactly as before (initial values).
+
+- Value must be an integer (int/bool states; string states are fixed
+  buffers — setters for them come with the allocator work).
+- Object fields use the dotted key: `ssr.state "user.age", rax` (the
+  module exports `set_user.age`).
+- The table is reset per request (no leakage between requests).
+
+How it works: the compiler marks every interpolated text in the shell with
+a substitution slot (`0x01 <state name> 0x02 <default> 0x03`) and the
+snapshot with an injection point (`0x04`). `asx_send_content` resolves the
+slots against the `ssr.state` table. Interpolated strings are excluded
+from the canonical checksum on both sides (the value is runtime data, not
+IR) — the glue still validates the rendered text node by node during
+hydration.
 
 ### Determinism rules
 
