@@ -61,8 +61,10 @@ emit_wat_main:
     ; exports (wat2wasm resolves globals in any order; the styles()
     ; export above reads it)
     call emit_style_global
-    ; state: button + "count: N" text -> emit the handle_event func
-    ; at the end of the module (after every other export)
+    ; $state_base global (declarative state data addr)
+    call emit_state_global
+    ; declarative actions on buttons -> the handle_event func at the end
+    ; of the module (after every other export)
     call emit_handle_event
     pop r15
     pop r14
@@ -117,10 +119,24 @@ hex6_main:
     ret
 
 ; ----------------------------------------------------------------------
-; emit_handle_event - if the layout has a button (rec kind 1) AND a text
-; node starting with "count: ", emits the $count global + the exported
-; handle_event into main_buf: a click (t==1) inside the button rect
-; increments $count and rewrites the digit at text_ptr+7 ("count: N").
+; emit_state_global - "(global $state_base i32 (i32.const <addr>))"
+; ----------------------------------------------------------------------
+emit_state_global:
+    push r12
+    lea rdi, [s_state_g1]
+    call out_main_str
+    mov rdi, [state_base_addr]
+    call itoa_main
+    lea rdi, [s_state_g2]
+    call out_main_str
+    pop r12
+    ret
+
+; ----------------------------------------------------------------------
+; emit_handle_event - if there are declarative actions (onclick=...),
+; emits the exported handle_event into main_buf: t==1 (click) dispatches
+; by widget id (the glue passes the data-asx-id of the clicked button).
+; Each action mutates the state slot and sets $ui_dirty.
 ; ----------------------------------------------------------------------
 emit_handle_event:
     push rbx
@@ -128,119 +144,152 @@ emit_handle_event:
     push r13
     push r14
     push r15
-    ; --- find the button view record (rec_order kind 1) ---
-    xor r12, r12
-.find_btn:
-    cmp r12, [rec_count]
-    jge .done
-    imul rax, r12, 12
-    lea rbx, [rec_order + rax]
-    cmp dword [rbx], 1          ; kind 1 = button view
-    je .have_btn
-    inc r12
-    jmp .find_btn
-.have_btn:
-    ; The glue resolves the click target via data-asx-role="button"
-    ; (ev.target.closest, set by the SSR pass or by the glue in CSR) and
-    ; only calls handle_event(1, ...) for clicks on a real button, with
-    ; coords relative to it. So the wasm hit test accepts anything:
-    ; 0 <= x/y < 32767.
-    mov r13d, 0                 ; bx = 0
-    mov r14d, 0                 ; by = 0
-    mov r15d, 32767             ; bw = 32767
-    mov ebx, 32767              ; bh = 32767
-    ; --- find the "count: " text node ---
-    xor r12, r12
-.find_cnt:
-    cmp r12, [node_count]
-    jge .done
-    imul rax, r12, NODE_SIZE
-    lea rcx, [nodes + rax]
-    mov eax, [rcx + N_TEXT_PTR]
-    test eax, eax
-    jz .next_cnt
-    lea rdi, [in_buf + rax]
-    lea rsi, [s_count_prefix]
-    mov rdx, 7
-    call strncmp
-    test rax, rax
-    jz .have_cnt
-.next_cnt:
-    inc r12
-    jmp .find_cnt
-.have_cnt:
-    ; the node's N_TEXT_PTR is an in_buf offset - the wasm text address
-    ; must come from the RECORD's text_offset (blob-relative), like the
-    ; emit pass does: find the rec_order entry whose node == r12
-    xor rdx, rdx                ; rec idx (r15 keeps bw - no r15 here!)
-.rec_loop:
-    cmp rdx, [rec_count]
-    jge .done
-    imul rax, rdx, 12
+    cmp qword [action_count], 0
+    je .done
+    lea rdi, [s_ev_h1]
+    call out_main_str
+    xor r12, r12                ; action idx
+.act_loop:
+    cmp r12, [action_count]
+    jge .close
+    imul rax, r12, ACTION_ENTRY
+    lea r13, [action_tab + rax]
+    ; resolve the button record idx (rec_order kind 1, node == A_WIDGET)
+    mov r14d, [r13 + A_WIDGET]
+    xor rbx, rbx
+.btn_loop:
+    cmp rbx, [rec_count]
+    jge .act_next
+    imul rax, rbx, 12
     lea r8, [rec_order + rax]
-    cmp dword [r8 + 4], r12d     ; rec node == the count node?
-    jne .rec_next
-    mov rax, rdx
-    imul rax, rax, 32
-    lea r8, [blob_buf + rax + 24]
-    mov eax, [r8 + 16]           ; text_offset (blob-relative)
-    mov rdi, rax
-    call wat_text_addr           ; rax = wasm addr, but str_cursor already
-                                 ; advanced by pool_len (.dd) and the styles
-                                 ; data segment (16*rec_count) - undo both:
-    mov ecx, [blob_len]
-    sub ecx, 24
-    mov edx, [rec_count]
-    imul edx, edx, 32
-    sub ecx, edx                 ; pool_len
-    sub rax, rcx
-    mov edx, [rec_count]
-    imul edx, edx, 16            ; styles_len
-    sub rax, rdx
-    jmp .have_off
-.rec_next:
-    inc rdx
-    jmp .rec_loop
-.have_off:
-    mov r12, rax                ; tp
-    ; --- emit (the $count global lives in the module header) ---
-    ; state accessors for hydration: the glue restores the snapshot
-    ; count BEFORE the first render (set_count) so the first paint is
-    ; exactly what the SSR produced
-    lea rdi, [s_ev_cnt_get]
+    cmp dword [r8], 1
+    jne .btn_next
+    cmp dword [r8 + 4], r14d
+    je .btn_found
+.btn_next:
+    inc rbx
+    jmp .btn_loop
+.btn_found:
+    ; id compare: local.get $id; i32.const <record>; i32.eq; if
+    lea rdi, [s_ev_id]
     call out_main_str
-    lea rdi, [s_ev_cnt_set]
-    call out_main_str
-    lea rdi, [s_ev_head]
-    call out_main_str
-    mov rdi, r13                ; bx
+    mov rdi, rbx
     call itoa_main
-    lea rdi, [s_ev_x_ge]
+    lea rdi, [s_ev_h2]
     call out_main_str
-    lea rax, [r13 + r15]        ; bx + bw
-    mov rdi, rax
+    ; field offset into state_data
+    mov edi, [r13 + A_STATE]
+    mov esi, [r13 + A_FIELD]
+    call state_field_addr
+    mov r14d, eax
+    ; op dispatch
+    mov eax, [r13 + A_OP]
+    cmp eax, OP_INC
+    je .op_inc
+    cmp eax, OP_DEC
+    je .op_dec
+    cmp eax, OP_SET
+    je .op_set
+    cmp eax, OP_ADD
+    je .op_add
+    cmp eax, OP_SUB
+    je .op_sub
+    cmp eax, OP_SET_TRUE
+    je .op_set_true
+    cmp eax, OP_SET_FALSE
+    je .op_set_false
+    jmp .act_dirty
+.op_inc:
+    lea rdi, [s_ev_ld]
+    call out_main_str
+    mov rdi, r14
     call itoa_main
-    lea rdi, [s_ev_x_lt]
+    lea rdi, [s_ev_ld2]
     call out_main_str
-    mov rdi, r14                ; by
+    lea rdi, [s_ev_c1]
+    call out_main_str
+    jmp .act_dirty
+.op_dec:
+    lea rdi, [s_ev_ld]
+    call out_main_str
+    mov rdi, r14
     call itoa_main
-    lea rdi, [s_ev_y_ge]
+    lea rdi, [s_ev_ld2]
     call out_main_str
-    lea rax, [r14 + rbx]        ; by + bh
-    mov rdi, rax
+    lea rdi, [s_ev_c1sub]
+    call out_main_str
+    jmp .act_dirty
+.op_set:
+    lea rdi, [s_ev_ld]
+    call out_main_str
+    mov rdi, r14
     call itoa_main
-    lea rdi, [s_ev_y_lt]
+    lea rdi, [s_ev_add]
     call out_main_str
-    mov rdi, r12                ; tp
+    lea rdi, [s_ev_cop]
+    call out_main_str
+    mov rdi, [r13 + A_OPERAND]
     call itoa_main
-    lea rdi, [s_ev_dig]
+    lea rdi, [s_ev_st]
     call out_main_str
-    ; SPACE key handler (same increment, duplicated in the template)
-    lea rdi, [s_ev_ksp]
+    jmp .act_dirty
+.op_add:
+    lea rdi, [s_ev_ld]
     call out_main_str
-    mov rdi, r12                ; tp
+    mov rdi, r14
     call itoa_main
-    lea rdi, [s_ev_ksp2]
+    lea rdi, [s_ev_ld2]
+    call out_main_str
+    lea rdi, [s_ev_cop]
+    call out_main_str
+    mov rdi, [r13 + A_OPERAND]
+    call itoa_main
+    lea rdi, [s_ev_addst]
+    call out_main_str
+    jmp .act_dirty
+.op_sub:
+    lea rdi, [s_ev_ld]
+    call out_main_str
+    mov rdi, r14
+    call itoa_main
+    lea rdi, [s_ev_ld2]
+    call out_main_str
+    lea rdi, [s_ev_copsub]
+    call out_main_str
+    mov rdi, [r13 + A_OPERAND]
+    call itoa_main
+    lea rdi, [s_ev_subst]
+    call out_main_str
+    jmp .act_dirty
+.op_set_true:
+    lea rdi, [s_ev_ld]
+    call out_main_str
+    mov rdi, r14
+    call itoa_main
+    lea rdi, [s_ev_add]
+    call out_main_str
+    lea rdi, [s_ev_st1]
+    call out_main_str
+    jmp .act_dirty
+.op_set_false:
+    lea rdi, [s_ev_ld]
+    call out_main_str
+    mov rdi, r14
+    call itoa_main
+    lea rdi, [s_ev_add]
+    call out_main_str
+    lea rdi, [s_ev_st0]
+    call out_main_str
+.act_dirty:
+    lea rdi, [s_ev_dirty]
+    call out_main_str
+    lea rdi, [s_ev_endif]
+    call out_main_str
+.act_next:
+    inc r12
+    jmp .act_loop
+.close:
+    lea rdi, [s_ev_close]
     call out_main_str
 .done:
     pop r15
