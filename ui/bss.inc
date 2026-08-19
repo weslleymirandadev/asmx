@@ -44,6 +44,10 @@ expand_buf:   resb IN_CAP
 expand_len:   resq 1
 arg_list:     resb MAX_ARGS * ARG_ENTRY_SIZE
 arg_count:    resq 1
+tp_props:     resb MAX_TYPED_PROPS * 136  ; {state_name[64], state_len u32, type_name[64], type_len u32}
+                                ; names are COPIED: the @@ splice overwrites
+                                ; the line the offsets pointed into
+tp_prop_count: resq 1
 comp_path:    resb 512
 comp_name:    resb 64
 comp_name_len: resq 1
