@@ -64,6 +64,9 @@ section .bss
     http_body_len      resq 1   ; body length in bytes
     http_content_length resq 1  ; parsed Content-Length header (-1 if absent)
 
+    ; Extracted header/cookie value (http/headers.asm) - null-terminated
+    hdr_val          resb 256
+
     ; Line scanning state
     http_line_start    resq 1
     http_line_end      resq 1
@@ -81,4 +84,5 @@ global http_response_404, http_response_404_len
 global http_req_method, http_req_path, http_req_version
 global http_req_method_idx
 global http_body_offset, http_body_len, http_content_length
+global hdr_val
 global http_line_start, http_line_end, http_line_count
