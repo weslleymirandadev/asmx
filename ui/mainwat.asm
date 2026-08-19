@@ -57,6 +57,10 @@ emit_wat_main:
     call hex6_main
     lea rdi, [s_main_t4]
     call out_main_str
+    ; $style_base global (styles data segment addr) - emitted after the
+    ; exports (wat2wasm resolves globals in any order; the styles()
+    ; export above reads it)
+    call emit_style_global
     ; state: button + "count: N" text -> emit the handle_event func
     ; at the end of the module (after every other export)
     call emit_handle_event
@@ -65,6 +69,23 @@ emit_wat_main:
     pop r13
     pop r12
     pop rbx
+    ret
+
+; ----------------------------------------------------------------------
+; emit_style_global - "(global $style_base i32 (i32.const <addr>))"
+; The styles() export (s_main_t4) reads $style_base; the data segment
+; address is only known after the component wat is emitted, so it is
+; written here, right after the header.
+; ----------------------------------------------------------------------
+emit_style_global:
+    push r12
+    lea rdi, [s_style_g1]
+    call out_main_str
+    mov rdi, [style_addr]
+    call itoa_main
+    lea rdi, [s_style_g2]
+    call out_main_str
+    pop r12
     ret
 
 ; hex6_main(rdi = 0xRRGGBB) - writes 6 hex digits to main_buf
@@ -119,26 +140,14 @@ emit_handle_event:
     inc r12
     jmp .find_btn
 .have_btn:
-    mov eax, [rbx + 4]          ; node index
-    imul rax, rax, NODE_SIZE
-    lea rcx, [nodes + rax]      ; node ptr (rcx dies in strncmp later - ok)
-    mov r13d, [rcx + N_AX]      ; bx
-    mov r14d, [rcx + N_AY]      ; by
-    mov r15d, [rcx + N_AW]      ; bw
-    mov ebx, [rcx + N_AH]       ; bh (rbx survives strncmp below)
-    ; the button x/y are relative to its parent; the event x/y are
-    ; relative to the whole ui - walk the parent chain and add offsets
-    mov eax, [rcx + N_PARENT]
-.off_loop:
-    test eax, eax
-    js .off_done
-    imul rax, rax, NODE_SIZE
-    lea rdx, [nodes + rax]
-    add r13d, [rdx + N_AX]
-    add r14d, [rdx + N_AY]
-    mov eax, [rdx + N_PARENT]
-    jmp .off_loop
-.off_done:
+    ; The glue filters clicks by the button's REAL DOM rect
+    ; (getBoundingClientRect) and only calls handle_event(1, ...) for
+    ; clicks inside a button, with coords relative to it. So the wasm
+    ; hit test accepts anything: 0 <= x/y < 32767.
+    mov r13d, 0                 ; bx = 0
+    mov r14d, 0                 ; by = 0
+    mov r15d, 32767             ; bw = 32767
+    mov ebx, 32767              ; bh = 32767
     ; --- find the "count: " text node ---
     xor r12, r12
 .find_cnt:
@@ -176,13 +185,17 @@ emit_handle_event:
     mov eax, [r8 + 16]           ; text_offset (blob-relative)
     mov rdi, rax
     call wat_text_addr           ; rax = wasm addr, but str_cursor already
-                                 ; advanced by pool_len (.dd) - undo it:
+                                 ; advanced by pool_len (.dd) and the styles
+                                 ; data segment (16*rec_count) - undo both:
     mov ecx, [blob_len]
     sub ecx, 24
     mov edx, [rec_count]
     imul edx, edx, 32
-    sub ecx, edx
-    sub rax, rcx                 ; rax = the real text address (148053...)
+    sub ecx, edx                 ; pool_len
+    sub rax, rcx
+    mov edx, [rec_count]
+    imul edx, edx, 16            ; styles_len
+    sub rax, rdx
     jmp .have_off
 .rec_next:
     inc rdx
