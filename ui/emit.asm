@@ -223,11 +223,126 @@ emit_wat_componente:
     imul ecx, ecx, 32
     sub eax, ecx
     add [str_cursor], rax
+    ; ---- style records (16B each, after the string pool) ----
+    ; build style_buf: one 16-byte style record per widget record
+    ; (same order as the 32B blob records): flags u16, weight, align,
+    ; gap, radius, px, py, border, opacity, shadow, role, pad x5
+    mov rax, [rec_count]
+    imul rax, rax, 16
+    mov [style_len], rax
+    xor r13, r13
+.sloop:
+    cmp r13, [rec_count]
+    jge .sloop_done
+    imul rax, r13, 12
+    lea rcx, [rec_order + rax]
+    mov eax, [rcx]               ; kind
+    mov ebx, [rcx + 4]           ; node idx
+    imul rbx, rbx, NODE_SIZE
+    lea rbx, [nodes + rbx]       ; node ptr
+    imul rax, r13, 16
+    lea rdi, [style_buf + rax]
+    ; zero the 16 bytes
+    mov ecx, 16
+    xor eax, eax
+    rep stosb
+    imul rax, r13, 16
+    lea rdi, [style_buf + rax]
+    ; flags u16
+    movzx eax, word [rbx + N_FLAGS]
+    mov [rdi], ax
+    ; weight/align/gap/radius/px/py/border/opacity/shadow
+    movzx eax, byte [rbx + N_WEIGHT]
+    mov [rdi + 2], al
+    movzx eax, byte [rbx + N_ALIGN]
+    mov [rdi + 3], al
+    movzx eax, byte [rbx + N_GAP]
+    mov [rdi + 4], al
+    movzx eax, byte [rbx + N_RADIUS]
+    mov [rdi + 5], al
+    movzx eax, byte [rbx + N_PX]
+    mov [rdi + 6], al
+    movzx eax, byte [rbx + N_PY]
+    mov [rdi + 7], al
+    movzx eax, byte [rbx + N_BORDER]
+    mov [rdi + 8], al
+    movzx eax, byte [rbx + N_OPACITY]
+    mov [rdi + 9], al
+    movzx eax, byte [rbx + N_SHADOW]
+    mov [rdi + 10], al
+    ; role: kind 1 (button view) = 1 (recompute rec_order ptr - rep
+    ; stosb clobbered rcx)
+    imul rax, r13, 12
+    lea rcx, [rec_order + rax]
+    mov eax, [rcx]               ; kind
+    cmp eax, 1
+    jne .role0
+    mov byte [rdi + 11], 1
+.role0:
+    ; pad (p-*), mt, mb, explicit height (h-*)
+    movzx eax, byte [rbx + N_PAD]
+    mov [rdi + 12], al
+    movzx eax, byte [rbx + N_MT]
+    mov [rdi + 13], al
+    movzx eax, byte [rbx + N_MB]
+    mov [rdi + 14], al
+    movzx eax, byte [rbx + N_H]
+    mov [rdi + 15], al
+    inc r13
+    jmp .sloop
+.sloop_done:
+    ; styles data segment at STR_BASE + str_cursor
+    mov rax, [str_cursor]
+    add rax, STR_BASE
+    mov [style_addr], rax
+    lea rdi, [s_wat_d1]
+    call out_wat_str
+    mov rdi, [style_addr]
+    call itoa_wat
+    lea rdi, [s_wat_d2]
+    call out_wat_str
+    xor r13, r13
+.sbytes:
+    cmp r13, [style_len]
+    jge .sbytes_done
+    lea rbx, [style_buf + r13]
+    xor r14, r14
+.sbyte_inner:
+    cmp r14, 16
+    jge .sbyte_next
+    movzx eax, byte [rbx + r14]
+    call out_wat_byte_hex
+    inc r14
+    jmp .sbyte_inner
+.sbyte_next:
+    add r13, 16
+    jmp .sbytes
+.sbytes_done:
+    lea rdi, [s_wat_d3]
+    call out_wat_str
+    ; str_cursor += 16 * rec_count
+    mov eax, [rec_count]
+    imul eax, eax, 16
+    add [str_cursor], rax
     pop r15
     pop r14
     pop r13
     pop r12
     pop rbx
+    ret
+
+; out_wat_byte_hex(al = byte) - writes \hh
+out_wat_byte_hex:
+    push rax
+    lea rdi, [s_wat_bs]
+    call out_wat_str
+    pop rax
+    push rax
+    shr al, 4
+    call out_wat_nibble
+    pop rax
+    and al, 0x0f
+    call out_wat_nibble
     ret
 
 ; emit_wat_i32(rdi = val) - "  i32.const <val>\n"
