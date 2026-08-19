@@ -75,7 +75,9 @@ extern asmx_send_text
 extern asmx_send_html
 extern asmx_send_status
 extern asmx_send_bytes
+extern asmx_send_redirect
 extern route_dispatch
+extern middleware_continue
 extern route
 extern slug_buf
 extern slug_len
@@ -84,6 +86,9 @@ extern requests
 extern http_get_method_idx
 extern http_get_body
 extern http_get_body_len
+; Request headers/cookies (http/headers.asm) - for the middleware
+extern http_get_header
+extern http_get_cookie
 ; Request object wrappers (asmx/req.asm) + method string buffer
 extern asmx_req_body
 extern asmx_req_body_len
@@ -92,6 +97,8 @@ extern asmx_req_has
 extern http_req_method
 ; SSR helper (asmx/ssr.asm)
 extern ssr_render
+; Helpers (asmx/helpers.asm)
+extern strcpy_adv
 ; JSON domain (json/*.asm) - available through the json. object macros
 extern json_parse
 extern json_find
@@ -222,6 +229,7 @@ section .PATCH exec progbits align=16
 section .DELETE exec progbits align=16
 section .SERVER exec progbits align=16
 section .CLIENT progbits align=16
+section .MIDDLEWARE exec progbits align=16
 
 ; route GET, POST, PUT, PATCH, DELETE (0 = method not supported).
 ; All 5 args are REQUIRED - NASM expands omitted macro args as empty
@@ -446,6 +454,128 @@ section .CLIENT progbits align=16
     mov rsi, %2
     mov rdx, %3
     call json_str_string
+%endmacro
+
+; ----------------------------------------------------------------------
+; middleware HANDLER - register the middleware for this project
+; (src/middleware.s, Next.js middleware.ts style). The handler runs
+; BEFORE routing, for EVERY request. It lives in `section .MIDDLEWARE`
+; and must end with one of:
+;
+;   mw.next              - continue routing normally (the page/API runs)
+;   mw.redirect "path"   - 302 + Location header, stop
+;   mw.rewrite "path"    - change req.path to "path" and continue routing
+;   mw.status code       - respond with a status code, stop
+;   mw.json/text/html ptr - respond directly, stop
+;
+; Request access (headers/cookies): req.header "Name", req.cookie "name"
+; (rax = value ptr, rdx = len, 0 if absent).
+;
+; Emits one 8-byte entry in the `middleware` linker section
+; (__start_middleware/__stop_middleware); the router calls it before
+; scanning the route table.
+; ----------------------------------------------------------------------
+%macro middleware 1
+    section middleware
+    dq %1
+    section .text
+%endmacro
+
+; ----------------------------------------------------------------------
+; mw.next - continue routing (jump back into the router dispatch).
+; ----------------------------------------------------------------------
+%macro mw.next 0
+    jmp middleware_continue
+%endmacro
+
+; ----------------------------------------------------------------------
+; mw.redirect "PATH" - respond 302 Found with a Location header.
+; ----------------------------------------------------------------------
+%macro mw.redirect 1
+    %ifstr %1
+        jmp %%skip
+    %%loc: db %1, 0
+    %%skip:
+        lea rdi, [%%loc]
+    %else
+        lea rdi, [%1]
+    %endif
+    call asmx_send_redirect
+    jmp requests
+%endmacro
+
+; ----------------------------------------------------------------------
+; mw.rewrite "PATH" - rewrite the current request path and continue
+; routing (the URL stays what the browser sent; the router sees "PATH").
+; ----------------------------------------------------------------------
+%macro mw.rewrite 1
+    %ifstr %1
+        jmp %%skip
+    %%path: db %1, 0
+    %%skip:
+        lea rsi, [%%path]
+    %else
+        lea rsi, [%1]
+    %endif
+    lea rdi, [route]
+    call strcpy_adv
+    jmp middleware_continue
+%endmacro
+
+; ----------------------------------------------------------------------
+; mw.status CODE / mw.json|text|html PTR - respond and stop.
+; ----------------------------------------------------------------------
+%macro mw.status 1
+    mov rdi, %1
+    call asmx_send_status
+    jmp requests
+%endmacro
+
+%macro mw.json 1
+    mov rdi, %1
+    call asmx_send_json
+    jmp requests
+%endmacro
+
+%macro mw.text 1
+    mov rdi, %1
+    call asmx_send_text
+    jmp requests
+%endmacro
+
+%macro mw.html 1
+    mov rdi, %1
+    call asmx_send_html
+    jmp requests
+%endmacro
+
+; ----------------------------------------------------------------------
+; req.header "NAME" - value of a request header (case-insensitive name).
+; rax = value ptr (hdr_val), rdx = len; rax = 0 if absent.
+; req.cookie "NAME" - value of a cookie (exact name, up to ';').
+; ----------------------------------------------------------------------
+%macro req.header 1
+    %ifstr %1
+        jmp %%skip
+    %%name: db %1, 0
+    %%skip:
+        lea rdi, [%%name]
+    %else
+        lea rdi, [%1]
+    %endif
+    call http_get_header
+%endmacro
+
+%macro req.cookie 1
+    %ifstr %1
+        jmp %%skip
+    %%name: db %1, 0
+    %%skip:
+        lea rdi, [%%name]
+    %else
+        lea rdi, [%1]
+    %endif
+    call http_get_cookie
 %endmacro
 
 %macro route.get 1
