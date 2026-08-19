@@ -8,16 +8,30 @@ emit_shell:
     push r13
     push r14
     push r15
+    ; <label>_shell: db '
     lea rdi, [s_sh1]
     call out_label
     mov al, 39
     call out_byte
-    lea rdi, [s_sh2]
+    ; <div id="ui" data-asmx-root="<ui_name>"
+    lea rdi, [s_ssr_div1]
     call out_str
     lea rdi, [ui_name_buf]
     mov rsi, [ui_name_len]
     call out_bytes
-    ; suffix: index (root) -> ".wasm"; other routes -> "/page.wasm"
+    ; " data-asmx-checksum="<fnv1a over the canonical IR>"
+    lea rdi, [s_ssr_ck1]
+    call out_str
+    call ssr_hash
+    mov rdi, rax
+    call ssr_hex8
+    ; " data-modules="/<ui_name>
+    lea rdi, [s_ssr_mod1]
+    call out_str
+    lea rdi, [ui_name_buf]
+    mov rsi, [ui_name_len]
+    call out_bytes
+    ; suffix: index (root) -> ".wasm>"; other routes -> "/page.wasm>"
     cmp qword [ui_name_len], 5
     jne .use_page
     cmp byte [ui_name_buf], 'i'
@@ -30,20 +44,30 @@ emit_shell:
     jne .use_page
     cmp byte [ui_name_buf + 4], 'x'
     jne .use_page
-    lea rdi, [s_sh3i]           ; '.wasm"></div>'
+    lea rdi, [s_ssr_sufi]       ; '.wasm">'
     jmp .emit_suf
 .use_page:
-    lea rdi, [s_sh3]            ; '/page.wasm"></div>'
+    lea rdi, [s_ssr_sufp]       ; '/page.wasm">'
 .emit_suf:
     call out_str
-    mov al, 39
-    call out_byte
-    lea rdi, [s_sh4]
+    ; close the line and open the next one: ' + ', 10 + newline + db '
+    call ssr_nl
+    ; --- SSR widget tree (stable data-asmx-id + inline CSS) ---
+    call ssr_emit_children
+    ; --- close the root #ui ---
+    lea rdi, [s_ssr_close]
     call out_str
-    lea rdi, [s_sh5]
+    call ssr_nl
+    ; --- hydration snapshot (minimal render state) ---
+    lea rdi, [s_ssr_snap1]
     call out_str
-    mov al, 39
-    call out_byte
+    lea rdi, [ui_name_buf]
+    mov rsi, [ui_name_len]
+    call out_bytes
+    lea rdi, [s_ssr_snap2]
+    call out_str
+    call ssr_nl
+    ; --- the glue script (hydration happens in the browser) ---
     lea rdi, [s_sh6]
     call out_str
     mov al, 39
@@ -139,6 +163,8 @@ emit_wat_componente:
     call emit_wat_i32
     movzx edi, byte [r15 + 14]
     call emit_wat_i32
+    movzx edi, byte [r15 + 15]  ; alpha (0 = transparent view)
+    call emit_wat_i32
     mov edi, [r15 + 20]         ; parent
     call emit_wat_parent
     lea rdi, [s_wat_view]
@@ -227,6 +253,56 @@ emit_wat_componente:
     ; build style_buf: one 16-byte style record per widget record
     ; (same order as the 32B blob records): flags u16, weight, align,
     ; gap, radius, px, py, border, opacity, shadow, role, pad x5
+    call build_style_records
+    ; styles data segment at STR_BASE + str_cursor
+    mov rax, [str_cursor]
+    add rax, STR_BASE
+    mov [style_addr], rax
+    lea rdi, [s_wat_d1]
+    call out_wat_str
+    mov rdi, [style_addr]
+    call itoa_wat
+    lea rdi, [s_wat_d2]
+    call out_wat_str
+    xor r13, r13
+.sbytes:
+    cmp r13, [style_len]
+    jge .sbytes_done
+    lea rbx, [style_buf + r13]
+    xor r14, r14
+.sbyte_inner:
+    cmp r14, 16
+    jge .sbyte_next
+    movzx eax, byte [rbx + r14]
+    call out_wat_byte_hex
+    inc r14
+    jmp .sbyte_inner
+.sbyte_next:
+    add r13, 16
+    jmp .sbytes
+.sbytes_done:
+    lea rdi, [s_wat_d3]
+    call out_wat_str
+    ; str_cursor += 16 * rec_count
+    mov eax, [rec_count]
+    imul eax, eax, 16
+    add [str_cursor], rax
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; build_style_records - fills style_buf with one 16-byte style record per
+; widget record (same order as the 32B blob records): flags u16, weight,
+; align, gap, radius, px, py, border, opacity, shadow, role, pad x5.
+; Sets style_len = rec_count * 16. Called by emit_wat_componente AND by
+; the SSR pass (emit_shell) - the SSR HTML needs the same style data.
+build_style_records:
+    push rbx
+    push r12
+    push r13
     mov rax, [rec_count]
     imul rax, rax, 16
     mov [style_len], rax
@@ -291,41 +367,6 @@ emit_wat_componente:
     inc r13
     jmp .sloop
 .sloop_done:
-    ; styles data segment at STR_BASE + str_cursor
-    mov rax, [str_cursor]
-    add rax, STR_BASE
-    mov [style_addr], rax
-    lea rdi, [s_wat_d1]
-    call out_wat_str
-    mov rdi, [style_addr]
-    call itoa_wat
-    lea rdi, [s_wat_d2]
-    call out_wat_str
-    xor r13, r13
-.sbytes:
-    cmp r13, [style_len]
-    jge .sbytes_done
-    lea rbx, [style_buf + r13]
-    xor r14, r14
-.sbyte_inner:
-    cmp r14, 16
-    jge .sbyte_next
-    movzx eax, byte [rbx + r14]
-    call out_wat_byte_hex
-    inc r14
-    jmp .sbyte_inner
-.sbyte_next:
-    add r13, 16
-    jmp .sbytes
-.sbytes_done:
-    lea rdi, [s_wat_d3]
-    call out_wat_str
-    ; str_cursor += 16 * rec_count
-    mov eax, [rec_count]
-    imul eax, eax, 16
-    add [str_cursor], rax
-    pop r15
-    pop r14
     pop r13
     pop r12
     pop rbx
