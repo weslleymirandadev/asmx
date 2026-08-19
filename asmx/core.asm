@@ -170,7 +170,10 @@ requests:
     mov rdx, 4096
     syscall
     test rax, rax
-    js .read_close
+    jle .read_close           ; EOF (0) or error (<0): the client never
+                              ; sent a request (probe/preconnect/bench
+                              ; that closed early) - close and move on,
+                              ; do NOT fabricate a 404 in the log
     mov rbx, rax                  ; bytes_read (rbx callee-saved)
 
     ; Start the request timer - the request bytes just arrived, so the
@@ -181,6 +184,9 @@ requests:
     mov rdi, buffer
     mov rsi, rbx
     call http_parse_request_line
+    test rax, rax
+    js .read_close            ; garbage that is not a valid request line:
+                              ; nothing to route, close without responding
 
     ; Copy path into route
     call http_get_path
