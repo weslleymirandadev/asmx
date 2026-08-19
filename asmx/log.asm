@@ -52,6 +52,9 @@ section .data
     banner_url  db 'http://localhost:', 0
     banner_post db 10, 0
     s_glue      db '/_asmx/glue.js', 0
+    br_err      db 'Error: port ', 0
+    br_mid      db ' already in use, starting server at ', 0
+    br_nl       db 10, 0
 
 section .bss
     ts_start   resq 2      ; clock_gettime timespec: sec, nsec
@@ -59,6 +62,39 @@ section .bss
     req_count  resq 1
 
 section .text
+
+; ----------------------------------------------------------------------
+; log_bind_retry(rdi = taken port) - colored "Error: port %d already in
+; use, starting server at %d" (the core then retries on port+1)
+; ----------------------------------------------------------------------
+global log_bind_retry
+log_bind_retry:
+    push r12
+    mov r12, rdi
+    lea rsi, [ansi_red]
+    call write_ansi
+    lea rsi, [ansi_bold]
+    call write_ansi
+    lea rdi, [br_err]
+    call print_str
+    mov rdi, r12
+    call print_itoa
+    lea rsi, [ansi_reset]
+    call write_ansi
+    lea rsi, [ansi_gray]
+    call write_ansi
+    lea rdi, [br_mid]
+    call print_str
+    lea rsi, [ansi_bold]
+    call write_ansi
+    lea rdi, [r12 + 1]
+    call print_itoa
+    lea rsi, [ansi_reset]
+    call write_ansi
+    lea rdi, [br_nl]
+    call print_str
+    pop r12
+    ret
 
 ; ----------------------------------------------------------------------
 ; log_banner(rdi = port) - colored startup banner
