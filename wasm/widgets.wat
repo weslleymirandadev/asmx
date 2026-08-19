@@ -28,6 +28,133 @@
 (global $widget_cap i32 (i32.const 64))
 (global $ui_dirty (mut i32) (i32.const 1))
 
+;; ssr_checksum() -> FNV-1a 32 over the canonical first-render IR:
+;; every 32B record EXCEPT bytes [16..20) (text_ptr: relative in the
+;; build-time blob, absolute address here), then every string in record
+;; order (up to, not including, the null). The server embeds the same
+;; hash in data-asmx-checksum (ui/ssr.asm) - the glue compares both to
+;; detect SSR <-> module divergence. Must match ui/ssr.asm ssr_hash.
+(func (export "ssr_checksum") (result i32)
+  (local $h i32) (local $i i32) (local $j i32) (local $b i32)
+  (local $tp i32)
+  i32.const 0x811c9dc5
+  local.set $h
+  ;; records
+  i32.const 0
+  local.set $i
+  block $rec_end
+  loop $rec
+    local.get $i
+    global.get $widget_count
+    i32.ge_u
+    br_if $rec_end
+    i32.const 0
+    local.set $j
+    block $rb_end
+    loop $rb
+      local.get $j
+      i32.const 32
+      i32.ge_u
+      br_if $rb_end
+      ;; skip the text_ptr field (record bytes 16..19)
+      local.get $j
+      i32.const 16
+      i32.ge_u
+      if
+        local.get $j
+        i32.const 20
+        i32.lt_u
+        if
+          local.get $j
+          i32.const 1
+          i32.add
+          local.set $j
+          br $rb
+        end
+      end
+      global.get $widget_base
+      local.get $i
+      i32.const 32
+      i32.mul
+      i32.add
+      local.get $j
+      i32.add
+      i32.load8_u
+      local.set $b
+      local.get $h
+      local.get $b
+      i32.xor
+      i32.const 0x01000193
+      i32.mul
+      local.set $h
+      local.get $j
+      i32.const 1
+      i32.add
+      local.set $j
+      br $rb
+    end
+    end
+    local.get $i
+    i32.const 1
+    i32.add
+    local.set $i
+    br $rec
+  end
+  end
+  ;; strings in record order (up to the null)
+  i32.const 0
+  local.set $i
+  block $str_end
+  loop $str
+    local.get $i
+    global.get $widget_count
+    i32.ge_u
+    br_if $str_end
+    global.get $widget_base
+    local.get $i
+    i32.const 32
+    i32.mul
+    i32.add
+    i32.const 16
+    i32.add
+    i32.load
+    local.set $tp
+    block $no_tp
+    local.get $tp
+    i32.eqz
+    br_if $no_tp
+    block $s_end
+    loop $s
+      local.get $tp
+      i32.load8_u
+      local.set $b
+      local.get $b
+      i32.eqz
+      br_if $s_end
+      local.get $h
+      local.get $b
+      i32.xor
+      i32.const 0x01000193
+      i32.mul
+      local.set $h
+      local.get $tp
+      i32.const 1
+      i32.add
+      local.set $tp
+      br $s
+    end
+    end
+    end
+    local.get $i
+    i32.const 1
+    i32.add
+    local.set $i
+    br $str
+  end
+  end
+  local.get $h
+)
+
 ;; ui_reset() - start a fresh widget list (call at the top of render())
 (func $ui_reset
   i32.const 0
@@ -123,9 +250,11 @@
   local.get $i
 )
 
-;; view(x, y, w, h, r, g, b, parent) -> widget index
+;; view(x, y, w, h, r, g, b, a, parent) -> widget index
+;; (a = alpha 0..255: 0 = transparent, the glue skips the background)
 (func $view (param $x i32) (param $y i32) (param $w i32) (param $h i32)
-            (param $r i32) (param $g i32) (param $b i32) (param $parent i32)
+            (param $r i32) (param $g i32) (param $b i32) (param $a i32)
+            (param $parent i32)
             (result i32)
   (local $off i32)
   global.get $widget_base
@@ -175,7 +304,7 @@
   local.get $off
   i32.const 15
   i32.add
-  i32.const 255
+  local.get $a
   i32.store8
   local.get $off
   i32.const 16
