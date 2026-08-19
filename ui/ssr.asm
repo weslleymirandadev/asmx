@@ -694,6 +694,7 @@ ssr_dec:
 
 ; ----------------------------------------------------------------------
 ; ssr_hex8(rdi = u32) - 8 lowercase hex digits to out_buf
+; ssr_hex6(rdi = u32) - 6 lowercase hex digits (0xRRGGBB theme colors)
 ; ssr_hex2(rdi = 0..255) - 2 lowercase hex digits
 ; ----------------------------------------------------------------------
 ssr_hex8:
@@ -705,6 +706,29 @@ ssr_hex8:
     mov rdi, r12
     shr rdi, 24
     call ssr_hex_nib
+    mov rdi, r12
+    shr rdi, 20
+    call ssr_hex_nib
+    mov rdi, r12
+    shr rdi, 16
+    call ssr_hex_nib
+    mov rdi, r12
+    shr rdi, 12
+    call ssr_hex_nib
+    mov rdi, r12
+    shr rdi, 8
+    call ssr_hex_nib
+    mov rdi, r12
+    shr rdi, 4
+    call ssr_hex_nib
+    mov rdi, r12
+    call ssr_hex_nib
+    pop r12
+    ret
+
+ssr_hex6:
+    push r12
+    mov r12, rdi
     mov rdi, r12
     shr rdi, 20
     call ssr_hex_nib
