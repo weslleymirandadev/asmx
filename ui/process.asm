@@ -89,6 +89,7 @@ process:
     mov rdi, r15
     mov rsi, rbx
     call compile_block
+    call validate_typed_props   ; typed @@ props (states now registered)
     call emit_shell
     call emit_wat_componente
     call append_wat_call
