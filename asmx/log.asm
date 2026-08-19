@@ -54,6 +54,7 @@ section .data
     s_glue      db '/_asmx/glue.js', 0
     br_err      db 'Error: port ', 0
     br_mid      db ' already in use, starting server at ', 0
+    bg_err      db 'Error: no free port found up to ', 0
     br_nl       db 10, 0
 
 section .bss
@@ -88,6 +89,29 @@ log_bind_retry:
     lea rsi, [ansi_bold]
     call write_ansi
     lea rdi, [r12 + 1]
+    call print_itoa
+    lea rsi, [ansi_reset]
+    call write_ansi
+    lea rdi, [br_nl]
+    call print_str
+    pop r12
+    ret
+
+; ----------------------------------------------------------------------
+; log_bind_giveup(rdi = max port) - colored "Error: no free port found
+; up to N" (the retry hit MAX_PORT without finding a free one)
+; ----------------------------------------------------------------------
+global log_bind_giveup
+log_bind_giveup:
+    push r12
+    mov r12, rdi
+    lea rsi, [ansi_red]
+    call write_ansi
+    lea rsi, [ansi_bold]
+    call write_ansi
+    lea rdi, [bg_err]
+    call print_str
+    mov rdi, r12
     call print_itoa
     lea rsi, [ansi_reset]
     call write_ansi
