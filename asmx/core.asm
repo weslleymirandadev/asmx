@@ -25,7 +25,7 @@ extern accept_error
 extern read_error
 extern server_fd, client_fd, asmx_handler
 extern buffer, route, resp_status
-extern log_banner, log_request, clock_start
+extern log_banner, log_bind_retry, log_request, clock_start
 
 section .bss
     sig_action resq 4     ; struct sigaction: sa_handler, sa_flags, sa_restorer, sa_mask
@@ -88,14 +88,23 @@ asmx_listen:
     mov rax, SYS_rt_sigaction
     syscall
 
-    mov rdi, r12                  ; restore port (sigaction clobbered rdi)
-    call socket_bind_listen       ; rax = server_fd
+.listen_loop:
+    mov rdi, r12                  ; current port (socket_bind_listen consumes rdi)
+    call socket_bind_listen       ; rax = server_fd or -1 (port in use)
+    cmp rax, -1
+    je .port_retry
     mov [server_fd], rax
 
     ; print the colored startup banner (log.asm)
     mov rdi, r12
     call log_banner
     ; fall through to requests
+.port_retry:
+    ; the port is taken: colored message, then retry on port+1
+    mov rdi, r12
+    call log_bind_retry
+    inc r12
+    jmp .listen_loop              ; rdi is re-set at the top of the loop
 
 ; ----------------------------------------------------------------------
 ; requests - accept loop (exported so user handlers can `jmp requests`)
