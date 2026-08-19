@@ -22,6 +22,8 @@
 
 extern __start_route
 extern __stop_route
+extern __start_middleware
+extern __stop_middleware
 extern route            ; current request path (copied by core.asm)
 extern http_get_method_idx
 extern http_serve_static
@@ -45,6 +47,23 @@ section .text
 
 global route_dispatch
 route_dispatch:
+    ; ------------------------------------------------------------------
+    ; Middleware (src/middleware.s, Next.js middleware.ts style): if a
+    ; `middleware` entry exists, run its handler BEFORE routing. We jmp
+    ; into it with a CLEAN stack (no pushes above): the handler ends
+    ; with `mw.next` (jmp middleware_continue -> back to routing) or
+    ; responds itself (mw.redirect/mw.status/... -> jmp requests).
+    ; ------------------------------------------------------------------
+    mov rax, __start_middleware
+    cmp rax, __stop_middleware
+    jge middleware_continue   ; no middleware registered
+    mov rbx, [__start_middleware]
+    test rbx, rbx
+    jz middleware_continue
+    jmp rbx                   ; mw.next -> jmp middleware_continue
+
+global middleware_continue
+middleware_continue:
     push r12
     push r13
     mov r12, __start_route
