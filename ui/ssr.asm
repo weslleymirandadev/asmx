@@ -61,6 +61,15 @@ ssr_hash:
 .str_loop:
     cmp r13, [rec_count]
     jge .done
+    ; interpolated texts (dyn) are SKIPPED: the value is runtime data
+    ; (ssr.state may override it server-side), not part of the canonical
+    ; IR. The wasm skips them too (dyn flag in record byte 25).
+    imul rax, r13, 12
+    lea rcx, [rec_order + rax]
+    mov edi, [rcx + 4]          ; node idx
+    call dyn_find               ; clobbers rbx/rdi - r13 safe
+    cmp rax, -1
+    jne .str_next
     imul rax, r13, 32
     lea rbx, [blob_buf + rax + 24]
     mov eax, [rbx + 16]        ; text_offset
@@ -217,6 +226,111 @@ ssr_open_node:
     mov eax, [rbx + 16]        ; text_offset
     test eax, eax
     jz .no_txt
+    ; dyn text (interpolated state)? emit a SUBSTITUTION SLOT instead of
+    ; the raw text: <prefix> 0x01 <state name> 0x02 <default> 0x03 <suffix>
+    ; The server (asx_send_content) replaces <default> with the ssr.state
+    ; value when set, or strips the markers otherwise.
+    push r12
+    push r13
+    push r14
+    imul rax, r12, 12
+    lea rcx, [rec_order + rax]
+    mov edi, [rcx + 4]          ; node idx
+    call dyn_find
+    pop r14
+    pop r13
+    pop r12
+    cmp rax, -1
+    je .tx_plain
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r14d, eax               ; dyn idx
+    ; text: [blob_buf + off, off + len)
+    mov eax, [rbx + 16]
+    lea r13, [blob_buf + rax]
+    mov rdi, r13
+    call strlen
+    mov r15, rax                ; total text len
+    imul rax, r14, DYN_ENTRY
+    lea rcx, [dyn_tab + rax]
+    ; prefix
+    mov esi, [rcx + D_PREFIX_LEN]
+    mov rdi, r13
+    call ssr_esc_text
+    ; slot open (', 1, ')
+    lea rdi, [s_ssr_slot1]
+    call out_str
+    ; state name (in_buf offset from state_tab)
+    imul rax, r14, DYN_ENTRY
+    lea rcx, [dyn_tab + rax]
+    mov edi, [rcx + D_STATE]
+    imul rax, rdi, STATE_ENTRY
+    lea rax, [state_tab + rax]
+    mov edi, [rax + S_NAME_PTR]
+    mov esi, [rax + S_NAME_LEN]
+    lea rdi, [in_buf + rdi]
+    call out_bytes
+    ; object field? the key is "state.field" (matches the set_<state>.<field>
+    ; export the glue restores from the snapshot)
+    imul rax, r14, DYN_ENTRY
+    lea rcx, [dyn_tab + rax]
+    mov eax, [rcx + D_FIELD]
+    cmp eax, -1
+    je .slot_field_done
+    push r15
+    mov al, '.'
+    call out_byte               ; clobbers rcx - recompute the dyn entry
+    ; field name: type -> fields -> field entry
+    imul rax, r14, DYN_ENTRY
+    lea rcx, [dyn_tab + rax]
+    mov edi, [rcx + D_STATE]
+    imul rax, rdi, STATE_ENTRY
+    mov edi, [state_tab + rax + S_TYPE_IDX]
+    imul rax, rdi, TYPE_ENTRY
+    mov edi, [type_tab + rax + T_FIELDS_IDX]
+    mov eax, [rcx + D_FIELD]
+    imul rax, rax, FIELD_ENTRY
+    lea rax, [field_tab + rdi + rax]
+    mov edi, [rax + F_NAME_PTR]
+    mov esi, [rax + F_NAME_LEN]
+    lea rdi, [in_buf + rdi]
+    call out_bytes
+    pop r15
+.slot_field_done:
+    ; slot sep (', 2, ')
+    lea rdi, [s_ssr_slot2]
+    call out_str
+    ; default value: text[D_PREFIX_LEN .. len - D_SUFFIX_LEN)
+    imul rax, r14, DYN_ENTRY
+    lea rcx, [dyn_tab + rax]
+    mov edx, [rcx + D_PREFIX_LEN]
+    mov r8d, [rcx + D_SUFFIX_LEN]
+    lea rdi, [r13 + rdx]
+    mov rsi, r15
+    sub rsi, rdx
+    sub rsi, r8
+    call ssr_esc_text
+    ; slot close (', 3, ')
+    lea rdi, [s_ssr_slot3]
+    call out_str
+    ; suffix: text[len - D_SUFFIX_LEN .. len)
+    imul rax, r14, DYN_ENTRY
+    lea rcx, [dyn_tab + rax]
+    mov edx, [rcx + D_SUFFIX_LEN]
+    mov rdi, r15
+    sub rdi, rdx
+    add rdi, r13
+    mov rsi, rdx
+    call ssr_esc_text
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    jmp .no_txt
+.tx_plain:
+    mov eax, [rbx + 16]        ; text_offset (dyn_find clobbered rax)
     lea rdi, [blob_buf + rax]
     mov rsi, rdi
 .tx:
