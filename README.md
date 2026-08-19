@@ -458,7 +458,11 @@ compute. The page also carries:
 - `data-asmx-checksum="<hex>"` — FNV-1a over the canonical IR (records
   with the text_ptr field skipped + strings in record order);
 - `<script type="application/asmx-state">` — the hydration snapshot
-  (minimal render state, e.g. `{"root":"index","count":0}`).
+  (minimal render state, e.g. `{"root":"index","count":0}`);
+- `<style data-asmx-base>` — the global reset + theme (`body` background
+  and color), served WITH the HTML so the first paint is already the
+  final layout; the glue skips injecting its own copy when this tag is
+  present (no layout flicker on reload).
 
 ```html
 <div id="ui" data-asmx-root="index" data-asmx-checksum="587c9529"
