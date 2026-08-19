@@ -21,6 +21,8 @@ section .data
     ct_ui_len   equ $ - ct_ui
 
     cl_prefix   db "Content-Length: ", 0
+global cc_nocache
+    cc_nocache  db "Cache-Control: no-cache", 13, 10, 0
     crlf2       db 13, 10, 13, 10       ; end of headers
     conn_close  db "Connection: close", 13, 10, 0
 
