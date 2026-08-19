@@ -12,6 +12,7 @@
 %include "ui/parse.asm"
 %include "ui/layout.asm"
 %include "ui/serialize.asm"
+%include "ui/state.asm"
 %include "ui/emit.asm"
 %include "ui/ssr.asm"
 %include "ui/mainwat.asm"
