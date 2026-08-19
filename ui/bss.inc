@@ -56,3 +56,27 @@ style_len:    resq 1
 style_addr:   resq 1                  ; wasm address of the styles data segment
 ssr_stack:    resb MAX_RECORDS * 8    ; open-view stack for SSR HTML emission
 ssr_top:      resq 1
+; declarative state tables
+type_tab:     resb MAX_TYPES * TYPE_ENTRY
+type_count:   resq 1
+field_tab:    resb MAX_FIELDS * FIELD_ENTRY
+field_count:  resq 1
+state_tab:    resb MAX_STATES * STATE_ENTRY
+state_count:  resq 1
+dyn_tab:      resb MAX_DYN_TEXTS * DYN_ENTRY
+dyn_count:    resq 1
+action_tab:   resb MAX_ACTIONS * ACTION_ENTRY
+action_count: resq 1
+state_data:   resb 512                ; initial values of the states
+state_data_len: resq 1
+state_str_buf: resb 512               ; bytes of the state strings
+state_str_len: resq 1
+state_base_addr: resq 1               ; wasm address of the state data segment
+state_str_base: resq 1                ; str_cursor offset where state strings start
+dyn_tmp_buf:  resb 64                 ; per-state resolved-value scratch
+dyn_dst:      resb MAX_DYN_TEXTS * 4  ; wasm addrs of the dyn texts (montage)
+dyn_prefix:   resb MAX_DYN_TEXTS * 4  ; wasm addrs of the dyn prefixes
+dyn_suffix:   resb MAX_DYN_TEXTS * 4  ; wasm addrs of the dyn suffixes
+dyn_parts_len: resq 1                 ; total bytes of the prefix/suffix segments
+str_addr_buf: resb MAX_FIELDS * 4     ; resolved wasm addrs of the state strings
+state_data_out: resb 512              ; state_data with resolved string ptrs
