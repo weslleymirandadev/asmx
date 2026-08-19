@@ -216,6 +216,24 @@ emit_wat_componente:
     call emit_wat_i32
     lea rdi, [s_wat_lbl]
     call out_wat_str
+    ; dyn flag in the wasm record byte 25 (1 = interpolated text): the
+    ; ssr_checksum skips its string on BOTH sides (the blob carries the
+    ; same flag, set by serialize). The widget index equals the record
+    ; index (widgets are created in rec_order).
+    imul rax, r12, 12
+    lea rcx, [rec_order + rax]
+    mov edi, [rcx + 4]          ; node idx
+    call dyn_find
+    cmp rax, -1
+    je .l2n
+    lea rdi, [s_dyn_f1]
+    call out_wat_str
+    mov rdi, r12
+    imul rdi, rdi, 32
+    add rdi, 25
+    call itoa_wat
+    lea rdi, [s_dyn_f2]
+    call out_wat_str
 .l2n:
     inc r12
     jmp .l2
