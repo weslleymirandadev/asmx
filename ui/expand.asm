@@ -736,7 +736,8 @@ copy_subst:
     mov rsi, r14
     sub rsi, r12
     dec rsi                     ; name len
-    ; {children}? -> wrap the value in quotes (it becomes a text line)
+    ; {children}? -> inline (inside quotes) substitutes the raw value;
+    ; on its own line it becomes a @p: "value" label line
     cmp rsi, 8
     jne .not_ch
     push rdi
@@ -746,6 +747,38 @@ copy_subst:
     pop rdi
     test rax, rax
     jnz .not_ch
+    ; is there anything but whitespace before the { on this line?
+    ; (line start = r13's saved value is gone, re-scan from the line
+    ; start: walk back from r12 to the previous newline)
+    mov r10, r12
+.bk:
+    cmp r10, 0
+    je .pure_line
+    mov al, [comp_buf + r10 - 1]
+    cmp al, 10
+    je .have_line_start
+    cmp al, 13
+    je .have_line_start
+    dec r10
+    jmp .bk
+.have_line_start:
+    mov r11, r10
+    jmp .scan_ws
+.pure_line:
+    xor r11, r11
+.scan_ws:
+    cmp r11, r12
+    jge .label_line            ; only whitespace before { -> label line
+    mov al, [comp_buf + r11]
+    cmp al, ' '
+    je .ws
+    cmp al, 9
+    je .ws
+    jmp .inline_ch
+.ws:
+    inc r11
+    jmp .scan_ws
+.label_line:
     mov rsi, 8                  ; rsi died in the strncmp - it is "children"
     call arg_lookup             ; rax = val ptr, rdx = val len
     cmp rax, -1
@@ -773,6 +806,29 @@ copy_subst:
     mov rax, [expand_len]
     mov byte [expand_buf + rax], '"'
     inc qword [expand_len]
+    mov r12, r14
+    inc r12                     ; skip '}'
+    jmp .loop
+.inline_ch:
+    ; inline {children}: substitute the raw value (the surrounding
+    ; quotes are already in the template line)
+    mov rsi, 8
+    call arg_lookup
+    cmp rax, -1
+    je .vcc_none
+    mov r11, rax
+    mov rbx, rdx
+    xor r8, r8
+.inl:
+    cmp r8, rbx
+    jge .inl_done
+    mov cl, [r11 + r8]
+    mov r10, [expand_len]
+    mov [expand_buf + r10], cl
+    inc qword [expand_len]
+    inc r8
+    jmp .inl
+.inl_done:
     mov r12, r14
     inc r12                     ; skip '}'
     jmp .loop
