@@ -52,9 +52,15 @@ section .data
  db '  const slug = location.pathname.split("/").filter(Boolean).pop() || "";', 10
  db '  if (e.slug_area) { const sa = e.slug_area(); const b = new TextEncoder().encode(slug); new Uint8Array(mem()).set(b, sa); new Uint8Array(mem())[sa + b.length] = 0; }', 10
  db '  const hex = (v) => "#" + ((v>>16)&255).toString(16).padStart(2,"0") + ((v>>8)&255).toString(16).padStart(2,"0") + (v&255).toString(16).padStart(2,"0");', 10
- db '  const st = document.createElement("style");', 10
- db '  st.textContent = "*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;font-family:ui-sans-serif,system-ui,sans-serif;padding:48px 24px}";', 10
- db '  document.head.appendChild(st);', 10
+ db '  // the SSR shell already carries the base css (style[data-asmx-base]', 10
+ db '  // with reset + theme) so the first paint is the final layout -', 10
+ db '  // only inject our copy when rendering client-side (no SSR shell)', 10
+ db '  if (!document.querySelector("style[data-asmx-base]")) {', 10
+ db '    const st = document.createElement("style");', 10
+ db '    st.setAttribute("data-asmx-base", "");', 10
+ db '    st.textContent = "*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;font-family:ui-sans-serif,system-ui,sans-serif;padding:48px 24px}";', 10
+ db '    document.head.appendChild(st);', 10
+ db '  }', 10
  db '  if (e.ui_theme_bg) document.body.style.background = hex(e.ui_theme_bg());', 10
  db '  if (e.ui_theme_text) document.body.style.color = hex(e.ui_theme_text());', 10
  db '  const els = [];', 10
