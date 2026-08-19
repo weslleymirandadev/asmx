@@ -206,14 +206,36 @@ find_block_end:
     je .at_q
     cmp al, '"'
     je .at_q
-    jmp .not_block
-.at_q:
+    ; keyword directive without '@' (state/type)? continues the block
+    mov rdi, r14
+    mov rsi, r13
+    push r12
+    push r13
+    call is_directive
+    pop r13
+    pop r12
+    test rax, rax
+    jnz .next
+    ; "field: value" body line of a type/state directive? (indented)
+    mov rdi, r14
+    mov rsi, r13
+    push r12
+    push r13
+    call line_has_colon
+    pop r13
+    pop r12
+    test rax, rax
+    jz .not_block
     cmp r14, r12
-    jle .not_block             ; indent == 0
+    jle .not_block             ; a bare "name:" at column 0 ends it
     jmp .next
 .not_block:
     mov rax, r12
     jmp .done
+.at_q:
+    cmp r14, r12
+    jle .not_block             ; indent == 0
+    jmp .next
 .next:
     mov r12, r13
     cmp r12, [in_len]
@@ -285,7 +307,14 @@ compile_block:
     je .text_line
     cmp al, '@'
     je .at_line
-    jmp .err_line
+    ; keyword directive without '@' (state/type)? consumes its lines
+    mov rdi, r12
+    mov rsi, r13
+    call parse_directive
+    cmp rax, -1
+    je .err_line
+    mov r12, rax
+    jmp .loop
 ; --- text line: "..." -> text of the open node ---
 .text_line:
     lea rbx, [r15 + 1]
@@ -321,6 +350,16 @@ compile_block:
     sub eax, r15d
     dec eax
     mov [rcx + N_TEXT_LEN], eax
+    ; declarative state interpolation ({x} / {x.field})?
+    push rcx
+    push rdx
+    mov rdi, rdx
+    shr rdi, 7                  ; node idx (NODE_SIZE = 128)
+    lea rsi, [r15 + 1]          ; text ptr (in_buf offset)
+    mov edx, [rcx + N_TEXT_LEN] ; u32 field!
+    call check_interp
+    pop rdx
+    pop rcx
     jmp .next_line
 ; --- @ line ---
 .at_line:
@@ -538,6 +577,13 @@ compile_block:
     mov eax, r10d
     sub eax, r9d               ; r9 is past the quote already - no -1
     mov [rdi + N_TEXT_LEN], eax
+    ; declarative state interpolation (view inline text)
+    push rdi
+    mov edx, [rdi + N_TEXT_LEN]  ; u32 field! (node ptr still in rdi)
+    mov rdi, r15                 ; child node idx
+    mov rsi, r9                  ; text ptr
+    call check_interp
+    pop rdi
     ; parent first/last point at the new child
     imul r8, rbx, NODE_SIZE
     lea r8, [nodes + r8]
@@ -556,6 +602,13 @@ compile_block:
     mov eax, r10d
     sub eax, r9d               ; r9 is past the quote already - no -1
     mov [rcx + N_TEXT_LEN], eax
+    ; declarative state interpolation
+    push rcx
+    mov rdi, rbx               ; node idx of the tag
+    mov rsi, r9
+    mov edx, [rcx + N_TEXT_LEN] ; u32 field!
+    call check_interp
+    pop rcx
 .no_inline:
     jmp .next_line
 .next_line:
@@ -791,22 +844,66 @@ parse_classes:
     jmp .loop
 .have_tok:
     mov rbx, r13
-.t_scan:
-    cmp r13, r14
-    jge .tok_done
-    mov al, [in_buf + r13]
+    ; attribute (name="value")? scan for '=' before any space
+    mov r9, rbx
+.attr_scan:
+    cmp r9, r14
+    jge .plain_tok
+    mov al, [in_buf + r9]
+    cmp al, '='
+    je .is_attr
     cmp al, ' '
-    je .tok_done
+    je .plain_tok
     cmp al, 9
-    je .tok_done
-    inc r13
-    jmp .t_scan
-.tok_done:
+    je .plain_tok
+    inc r9
+    jmp .attr_scan
+.plain_tok:
+    ; normal class token: [rbx, r9)
     mov rdi, r12
     lea rsi, [in_buf + rbx]
-    mov rdx, r13
+    mov rdx, r9
     sub rdx, rbx
     call class_apply
+    mov r13, r9
+    jmp .loop
+.is_attr:
+    ; name = [rbx, r9); find the opening quote
+    lea r10, [r9 + 1]
+.attr_q:
+    cmp r10, r14
+    jge .plain_tok
+    mov al, [in_buf + r10]
+    cmp al, '"'
+    je .attr_val
+    inc r10
+    jmp .attr_q
+.attr_val:
+    inc r10                     ; value start
+    mov r11, r10
+.attr_vscan:
+    cmp r11, r14
+    jge .plain_tok
+    cmp byte [in_buf + r11], '"'
+    je .attr_vend
+    inc r11
+    jmp .attr_vscan
+.attr_vend:
+    ; value = [r10, r11)
+    mov rdi, rbx                ; name ptr
+    mov rsi, r9
+    sub rsi, rbx                ; name len
+    mov rdx, r10                ; value ptr
+    mov rcx, r11
+    sub rcx, r10                ; value len
+    push r14
+    push r11
+    call parse_attr
+    pop r11
+    pop r14
+    ; continue after the closing quote
+    mov r13, r11
+    inc r13
     jmp .loop
 .done:
     pop r14
