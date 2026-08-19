@@ -417,8 +417,9 @@ Each `@` block in a `page.s` goes through `build/tools/ui-compile` — a
 2. expands `@@component` calls from `src/components/`,
 3. emits one `.wat` file per component + a `_main.wat` (render + theme +
    event wiring) into `build/<page>.s.d/`,
-4. rewrites the page with an HTML shell:
-   `<div id="ui" data-modules="/<route>/page.wasm">` + the glue script tag.
+4. rewrites the page with an **SSR HTML shell**:
+   `<div id="ui" data-asmx-root="..." data-asmx-checksum="...">` + the full
+   server-rendered widget tree + the state snapshot + the glue script tag.
 
 The Makefile then links the framework WAT lib (`asmx/wasm/*.wat`: draw,
 text, widgets, components) + those `.wat` files into one module per page:
@@ -434,12 +435,80 @@ The module exports (all framework-provided):
 | `ui_dirty`     | 1 if a re-render is pending (events set it)          |
 | `ui_theme_bg/text/accent` | theme colors                            |
 | `slug_area`    | writable address where the glue stores the slug      |
+| `styles`       | base pointer of the 16-byte style records            |
+| `ssr_checksum` | FNV-1a of the canonical IR (see SSR below)           |
+| `set_count`/`get_count` | counter state accessors (hydration snapshot)  |
 | `handle_event` | (type, x, y, key) — clicks/mouse/keyboard dispatch   |
 
 `/_asmx/glue.js` is a virtual file served by the framework (no entry in
 `static/`): it instantiates the module, applies the theme, syncs the widget
 tree to DOM (`View → div`, `Text → span`), forwards mouse/keyboard events,
 and polls `ui_dirty` to re-render on interaction.
+
+## SSR + hydration
+
+The shell the server sends is not an empty container: `ui-compile` renders
+the **full widget tree as HTML** at build time (same IR as the WASM — the
+serialized blob + style records — so both backends cannot diverge by
+construction). Each widget gets a stable `data-asmx-id` (its record index,
+deterministic pre-order) and inline CSS identical to what the glue would
+compute. The page also carries:
+
+- `data-asmx-root="<route>"` on `#ui` — the root id the runtime hydrates;
+- `data-asmx-checksum="<hex>"` — FNV-1a over the canonical IR (records
+  with the text_ptr field skipped + strings in record order);
+- `<script type="application/asmx-state">` — the hydration snapshot
+  (minimal render state, e.g. `{"root":"index","count":0}`).
+
+```html
+<div id="ui" data-asmx-root="index" data-asmx-checksum="587c9529"
+     data-modules="/index.wasm">
+  <div data-asmx-id="0" style="position:relative;display:flex;...">
+    <span data-asmx-id="1" style="...">OLHA O MACACO</span>
+    ...
+  </div>
+</div>
+<script type="application/asmx-state">{"root":"index","count":0}</script>
+<script type="module" src="/_asmx/glue.js"></script>
+```
+
+The runtime is an explicit phase machine:
+
+```text
+SSR  ->  HYDRATING  ->  INTERACTIVE
+```
+
+During **HYDRATING** the glue:
+
+1. locates the root by `data-asmx-root` (falls back to client rendering
+   when absent);
+2. parses the snapshot and restores the render state **before** the first
+   render (`set_count`);
+3. recomputes the checksum in the module (`ssr_checksum`) and compares it
+   with `data-asmx-checksum` — a mismatch logs an `ASMX Hydration Error`
+   with the server/client hashes;
+4. maps the SSR DOM by `data-asmx-id` and **reuses** those nodes — no
+   structural changes unless a node is missing or its tag type diverges
+   (that subtree alone is re-created, with a diagnostic);
+5. validates text per node (slug replacement happens here; `{slug}` in the
+   SSR DOM is expected and not reported);
+6. attaches behavior (event listeners) and enters **INTERACTIVE**.
+
+So the browser never rebuilds the page: SSR produces the appearance,
+hydration connects the behavior. `curl` shows the full rendered UI even
+with JavaScript disabled.
+
+### Determinism rules
+
+- The first render is deterministic: SSR and client read the same IR, and
+  the snapshot carries the render state (never re-query a database or
+  `random()`/`Date` for first-render values).
+- `{slug}` is a browser-only value: the SSR DOM shows the placeholder and
+  the glue substitutes it during hydration (documented divergence, not an
+  error).
+- If you break SSR/client equivalence (e.g. stale `static/` wasm after
+  editing a page), the checksum mismatch tells you exactly which root and
+  which hashes diverged, and the glue repairs the tree node by node.
 
 ### Hot reload (dev)
 
