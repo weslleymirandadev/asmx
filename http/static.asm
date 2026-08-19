@@ -12,7 +12,7 @@
 extern client_fd
 extern resp_buf
 extern itoa_buf
-extern cl_prefix, crlf2
+extern cl_prefix, crlf2, cc_nocache
 extern memcpy_adv, strcpy_adv
 extern strlen
 extern mime_lookup
@@ -88,6 +88,10 @@ http_serve_static:
     mov rdx, r14
     call memcpy_adv           ; Content-Type line
     mov r15, rax
+    mov rdi, r15
+    lea rsi, [cc_nocache]
+    call strcpy_adv           ; "Cache-Control: no-cache\r\n" (the glue
+    mov r15, rax              ; re-checks wasm bytes on every hot reload)
     mov rdi, r15
     lea rsi, [cl_prefix]
     call strcpy_adv           ; "Content-Length: "
