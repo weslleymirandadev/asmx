@@ -34,14 +34,13 @@ msg_comp_missing db "ui-compile: cannot read component file (src/components/<nam
 msg_comp_missing_len equ $ - msg_comp_missing
 msg_comp_label db "ui-compile: component block not found (label <name>:)", 10
 msg_comp_label_len equ $ - msg_comp_label
-msg_comp_param db "ui-compile: missing parameter '{...}' in @comp", 10
+msg_comp_param db "ui-compile: missing parameter '{...}' in @@", 10
 msg_comp_param_len equ $ - msg_comp_param
 msg_comp_depth db "ui-compile: component nesting too deep", 10
 msg_comp_depth_len equ $ - msg_comp_depth
-msg_comp_args  db "ui-compile: invalid @comp arguments", 10
+msg_comp_args  db "ui-compile: invalid @@ component arguments", 10
 msg_comp_args_len equ $ - msg_comp_args
 s_components   db "src/components/", 0
-s_comp_tag     db "comp", 0
 
 ; --- literais do output (shell no page.s + WAT) ---
 s_sh1         db "_shell: db ", 0
