@@ -54,3 +54,5 @@ save_label_len: resq 1
 style_buf:    resb MAX_RECORDS * 16   ; style records (flags/weight/align/gap/...)
 style_len:    resq 1
 style_addr:   resq 1                  ; wasm address of the styles data segment
+ssr_stack:    resb MAX_RECORDS * 8    ; open-view stack for SSR HTML emission
+ssr_top:      resq 1
