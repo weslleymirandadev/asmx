@@ -154,7 +154,8 @@ s_main_t3     db ")", 10, '(func (export "ui_theme_accent") (result i32) i32.con
 s_main_t4     db ")", 10
               db '(func (export "widgets") (result i32) global.get $widget_base)', 10
               db '(func (export "widget_count") (result i32) global.get $widget_count)', 10
-              db '(func (export "ui_dirty") (result i32) global.get $ui_dirty)', 10, 0
+              db '(func (export "ui_dirty") (result i32) global.get $ui_dirty)', 10
+              db '(func (export "slug_area") (result i32) i32.const 185000)', 10, 0
 s_dot_d       db ".d/", 0
 s_dot_d_dir   db ".d", 0
 s_dot_wat     db ".wat", 0
