@@ -44,6 +44,7 @@
 
 ; @@ components (expand.asm)
 %define MAX_ARGS        16
+%define MAX_TYPED_PROPS  8
 %define ARG_ENTRY_SIZE  32      ; key_ptr, key_len, val_ptr, val_len (dq each)
 %define MAX_COMP_DEPTH  16
 
