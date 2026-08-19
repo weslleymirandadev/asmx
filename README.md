@@ -1,12 +1,15 @@
 # ASMX
 
-A web framework written in x86-64 assembly (NASM) for Linux. No libc, no
-runtime, no dependencies — just a static ELF binary that speaks HTTP.
+Fullstack web framework written in **x86-64 assembly (NASM)** for Linux.
+No libc, no runtime, no dependencies — just a static ELF binary that speaks
+HTTP. The frontend is **WebAssembly** (also generated from assembly), so the
+whole stack — server and browser — is assembly.
 
 Next.js-style file conventions: `page.s` for HTML pages, `route.s` for API
-handlers, `not-found.s` for the 404 page, and a `public/` folder served
-automatically. Includes a JSON parser and stringifier for handling request
-bodies and building responses.
+handlers, `not-found.s` for the 404 page, and a `static/` folder served
+automatically. Pages declare their UI with the `@` DSL (Tailwind-like) which
+compiles to a WASM module per route; the server renders the shell, the glue
+script instantiates the module and renders the widgets to the DOM.
 
 ## Requirements
 
@@ -48,45 +51,63 @@ That's it. The server listens on port 3000:
 [ASMX]: listening on http://localhost:3000
 ```
 
+The dev server logs one line per request:
+
+```
+GET / 200 (66μs)
+GET /api/hello 200 (55μs)
+GET /missing 404 (61μs)
+POST /sobre 405 (54μs)
+```
+
+With the CLI (`asmx dev`) it also watches sources, rebuilds on change and
+hot-reloads the browser via the `/_asmx/events` stream (see Hot reload
+below).
+
 ## Project structure
 
 ```
 myapp/
-├── asmx/                <- the framework (this repo), installed per-project
-│   ├── asmx.inc         <- public API: macros + externs
-│   ├── asmx/            <- core: accept loop, router, senders, state
-│   ├── common/          <- syscalls, macros, strings, errors
-│   ├── http/            <- HTTP parsing, MIME, static files
-│   ├── json/            <- JSON parser + stringifier
-│   └── net/             <- socket_bind_listen
-├── static/               <- static assets, served automatically
-│   └── <route>/page.wasm  <- per-page UI wasm (root: index.wasm)
+├── asmx/                  <- the framework
+│   ├── asmx.inc           <- public API: macros + externs (include this)
+│   ├── asmx/              <- core: listen loop, router, senders, state
+│   ├── common/            <- syscalls, strings, macros, errors
+│   ├── http/              <- HTTP parsing, MIME, static files
+│   ├── json/              <- JSON parser + stringifier
+│   ├── net/               <- socket_bind_listen
+│   ├── ui/                <- the @ DSL compiler (build tool, pure asm)
+│   └── wasm/              <- framework WAT lib + glue.js generator
+├── static/                <- per-route UI wasm modules (served automatically)
+│   ├── index.wasm         <- root page module (src/app/page.s)
+│   └── sobre/page.wasm    <- /sobre module (src/app/sobre/page.s)
 ├── src/
-│   ├── main.asm         <- entry point: listen + route dispatch
-│   └── app/             <- your routes (see Routing below)
-└── Makefile             <- zero-maintenance (auto-discovers everything)
+│   ├── main.asm           <- entry: listen + route dispatch
+│   ├── app/               <- your routes (see Routing)
+│   └── components/        <- reusable @ DSL components (see Components)
+└── Makefile               <- zero-maintenance (auto-discovers everything)
 ```
 
 ## Routing (Next.js-style)
 
 The route path **derives from the file location** — you never declare it.
-The build passes it to the assembler via `-DROUTE_PATH`.
+The Makefile passes it to the assembler via `-DROUTE_PATH`.
 
-| file                          | route       | kind         |
-|-------------------------------|-------------|--------------|
-| `src/app/page.s`              | `/`         | HTML page    |
-| `src/app/about/page.s`        | `/about`    | HTML page    |
-| `src/app/api/hello/route.s`   | `/api/hello`| API handler  |
-| `src/app/not-found.s`         | (reserved)  | 404 page     |
+| file                              | route            | kind          |
+|-----------------------------------|------------------|---------------|
+| `src/app/page.s`                  | `/`              | HTML page     |
+| `src/app/sobre/page.s`            | `/sobre`         | HTML page     |
+| `src/app/api/hello/route.s`       | `/api/hello`     | API handler   |
+| `src/app/profile/[id]/page.s`     | `/profile/[id]`  | dynamic page  |
+| `src/app/not-found.s`             | (reserved)       | 404 page      |
 
-- `page.s` = a page that sends HTML.
+- `page.s` = a page that sends HTML (implicit GET, like `app/page.tsx`).
 - `route.s` = an API handler (any response: JSON, text, ...).
 - `not-found.s` = the custom 404 page (path reserved as `/__not_found`).
-- Anything in `public/` is served at `/` automatically — **no route needed**.
+- Anything in `static/` is served at `/` automatically — **no route needed**.
 
 ### Minimal page
 
-Pages are implicitly GET (like `app/page.tsx`) and run in `.SERVER`:
+Pages run in `section .SERVER` and end with `asmx.next`:
 
 ```nasm
 ; src/app/page.s  ->  GET /
@@ -108,7 +129,7 @@ A `page` route is GET-only — POST yields an automatic 405.
 ### Minimal API
 
 ```nasm
-; src/app/api/hello/route.s  ->  GET /api/hello
+; src/app/api/hello/route.s  ->  /api/hello
 %include "asmx.inc"
 
 section .data
@@ -159,258 +180,292 @@ delete_user:
     asmx.next
 ```
 
-Every handler must end with `asmx.next` (back to the accept loop). A
-missing handler (`0` in the route entry) yields an automatic
-`405 Method Not Allowed`. HEAD/OPTIONS are parsed but not dispatched
-yet (405). Single-method convenience macros: `route.get`, `route.post`,
-`route.put`, `route.patch`, `route.delete`, `route.both` (GET+POST).
+Every handler must end with `asmx.next` (back to the accept loop). A missing
+handler (`0` in the route entry) yields an automatic `405 Method Not
+Allowed`. HEAD/OPTIONS are parsed but not dispatched yet (405). Single-method
+convenience macros: `route.get`, `route.post`, `route.put`, `route.patch`,
+`route.delete`, `route.both` (GET+POST).
+
+## The `@` DSL (declaring UI in page.s)
+
+Pages can declare their UI directly in `.data` with the `@` DSL — a
+Tailwind-flavored, indentation-based tree language. It is NOT HTML: the
+build compiles each block into a serialized widget tree, an HTML shell, and
+a WASM module that renders it in the browser.
+
+```nasm
+; src/app/sobre/page.s  ->  GET /sobre
+%include "asmx.inc"
+
+section .data
+    sobre_content:
+        @main bg-black text-white min-h-screen p-8:
+            @h1 text-4xl: "Sobre o ASMX"
+            @p text-blue-500: "Fullstack Assembly + WebAssembly"
+
+            @div bg-white w-10:
+                @h2 text-black font-bold: "Oi"
+
+            @@card cor="#f00" titulo="Blog" texto="hoje o blog é criminoso":
+                "Crimes"
+        @end
+
+page get_sobre
+
+section .SERVER
+get_sobre:
+    res.content sobre_content
+    asmx.next
+```
+
+- **Tags**: `@main @div @section @nav @header @footer @h1 @h2 @h3 @p @span
+  @a @button`. Text-bearing tags (`h1 h2 h3 p span a button`) take inline
+  text after a colon: `@h1 text-4xl: "Texto"`.
+- **Classes**: `bg-<color> text-<color> text-<size> font-bold p-* m-* mt-*
+  mb-* w-* min-h-screen` — full Tailwind v3 palette (slate→rose, 50–950,
+  black/white) and spacing scale (0→96, px, fractions, screen).
+- **Children**: indentation is the tree. A bare string on its own line is a
+  text child of the nearest open tag.
+- `@theme bg #hex text #hex accent #hex` (optional, anywhere in the block).
+  Without it, the root view's `bg-*` becomes the page background.
+- **`@end`** closes the block.
+- `res.content <label>` sends the generated shell (`<label>_shell`); the
+  glue script loads `<route>/page.wasm` and renders the widgets.
+
+### Interactive elements
+
+A page with a `@button` and a `@p` containing `"count: 0"` gets a wired
+`handle_event` automatically: clicking the button (or pressing SPACE)
+increments the digit. The generated WASM keeps a `$count` global and
+re-renders the dirty widget (the glue polls `ui_dirty`).
+
+```nasm
+; src/app/page.s (the home page)
+section .data
+    index_content:
+        @theme bg #0f1117 text #f5f5f5 accent #f97316
+        @main p-8
+            @h1 text-5xl font-bold text-orange-500:
+                "OLHA O MACACeO"
+            @p text-gray-400 mt-4:
+                "assembly no servidor - wasm no browser"
+            @div mt-8 p-6:
+                @p text-2xl:
+                    "count: 0"
+                @button bg-orange-500 mt-6 p-3:
+                    "CLIQUE AQUI"
+            @p text-gray-400 mt-8:
+                "aperte ESPACO ou clique no botao"
+        @end
+```
+
+The build recognizes the `count: N` text pattern and emits a hit-test +
+increment handler in the module (see `asmx/ui/literals.inc`).
+
+## Components (`@@name`)
+
+Reusable blocks live in `src/components/<name>.s` and are invoked with
+`@@name key="value"` (or `@@name key="value":` + children on the next line).
+They take `{param}` placeholders and a special `{children}` slot.
+
+```nasm
+; src/components/badge.s
+; Usage: @@badge cor="green-500": "texto"
+badge:
+    @div bg-{cor} p-2
+        {children}
+    @end
+```
+
+```nasm
+; src/components/card.s
+; Usage: @@card cor="blue-500" titulo="...": "children aqui"
+card:
+    @div bg-{cor} p-6
+        @h1 text-white text-2xl
+            "{titulo}"
+        {children}
+        @@badge cor="green-500": "componente aninhado"
+    @end
+```
+
+- Parameters are substituted into class names and text (`bg-{cor}`).
+- `{children}` is replaced by whatever the caller passes — inline after the
+  `:` (`@@card ...: "texto"`) or as a following line.
+- Components nest recursively (up to depth 16) and any change to a component
+  rebuilds every page (`COMP_SRCS` in the Makefile).
+- The page block also gets an implicit label: `@@card` in `sobre_content`
+  compiles to `sobre_content.wat` + `_main.wat` under
+  `build/<page>.s.d/`, linked into the page's module.
+
+## Dynamic routes (`[id]` segments)
+
+Next.js-style slugs: a `[id]` segment in the file path becomes a pattern
+route. `src/app/profile/[id]/page.s` matches `/profile/joao`, `/profile/42`,
+etc.
+
+```nasm
+; src/app/profile/[id]/page.s  ->  GET /profile/<slug>
+%include "asmx.inc"
+
+section .data
+    profile_content:
+        @main p-8:
+            @h1 text-4xl font-bold text-orange-500:
+                "Perfil"
+            @div mt-8:
+                @@card cor="#1e3a5f" titulo="Oi {slug}":
+                    "Bem-vindo, {slug}!"
+        @end
+
+page get_profile
+
+section .SERVER
+get_profile:
+    res.content profile_content
+    asmx.next
+```
+
+How it works:
+
+- The router tries exact string matches first; if none, it tests the pattern
+  (prefix before `[`, suffix after `]`). The matched segment is copied to
+  `slug_buf` (null-terminated) and `slug_len`.
+- Server-side: `req.slug` gives you the slug (`rdi` = ptr, `rsi` = len) in
+  any `.SERVER` handler.
+- Client-side: the glue writes the last path segment of `location.pathname`
+  into the module's `slug_area` export, and **`{slug}` in any text is
+  replaced at render time**. `/profile/joao` renders the card with
+  "Oi joao".
+- The wasm module is shared by every slug — one module per route pattern:
+  `static/profile/[id]/page.wasm`, served at the literal `/profile/[id]/page.wasm`
+  URL (the file keeps the brackets exactly like the route).
+- A slug containing a `.` is treated as a static asset (e.g.
+  `/profile/page.wasm` is a file, not a slug) so dynamic routes never shadow
+  static files.
+- You can have BOTH `src/app/profile/page.s` (static `/profile`) and
+  `src/app/profile/[id]/page.s` (dynamic `/profile/<slug>`) — they get
+  separate modules (`static/profile/page.wasm` and
+  `static/profile/[id]/page.wasm`) and the exact route wins.
+
+## How the frontend is built
+
+Each `@` block in a `page.s` goes through `build/tools/ui-compile` — a
+**pure-assembly preprocessor** (no Python):
+
+1. parses the block (tags, classes, params, children),
+2. expands `@@component` calls from `src/components/`,
+3. emits one `.wat` file per component + a `_main.wat` (render + theme +
+   event wiring) into `build/<page>.s.d/`,
+4. rewrites the page with an HTML shell:
+   `<div id="ui" data-modules="/<route>/page.wasm">` + the glue script tag.
+
+The Makefile then links the framework WAT lib (`asmx/wasm/*.wat`: draw,
+text, widgets, components) + those `.wat` files into one module per page:
+`static/<route>/page.wasm` (root = `static/index.wasm`), via `cat | wat2wasm`.
+
+The module exports (all framework-provided):
+
+| export         | purpose                                              |
+|----------------|------------------------------------------------------|
+| `render`       | rebuild the widget tree (also resets dirty flag)     |
+| `widgets`      | base pointer of the widget array (32-byte records)   |
+| `widget_count` | number of widgets                                    |
+| `ui_dirty`     | 1 if a re-render is pending (events set it)          |
+| `ui_theme_bg/text/accent` | theme colors                            |
+| `slug_area`    | writable address where the glue stores the slug      |
+| `handle_event` | (type, x, y, key) — clicks/mouse/keyboard dispatch   |
+
+`/_asmx/glue.js` is a virtual file served by the framework (no entry in
+`static/`): it instantiates the module, applies the theme, syncs the widget
+tree to DOM (`View → div`, `Text → span`), forwards mouse/keyboard events,
+and polls `ui_dirty` to re-render on interaction.
+
+### Hot reload (dev)
+
+The glue opens `/_asmx/events` (EventSource) which answers once with
+`retry: 250` and closes (the server is single-threaded). The browser
+reconnects on its own; each `onopen` re-fetches the wasm with
+`cache: "no-store"` and, if the bytes changed, re-instantiates and
+re-renders. `asmx dev` (the CLI) rebuilds on file change and the page
+updates without a manual refresh.
 
 ## Public API
 
 Include `%include "asmx.inc"` in every route file.
 
-### Macros
+### Response (`res.`)
 
-| macro                     | description |
-|---------------------------|-------------|
-| `listen PORT`             | bind + accept loop; code after it runs once per request |
-| `route get, post`         | register handlers for this file's path (`0` = not supported) |
-| `cmp route, "/path"`      | string compare of the current path (works with `je`/`jne`) |
-| `send_json ptr`           | respond 200, `application/json` |
-| `send_text ptr`           | respond 200, `text/plain` |
-| `send_html ptr`           | respond 200, `text/html` |
-| `send_status code`        | respond with a status code, empty body (e.g. `send_status 404`) |
-| `send_json_bytes ptr, len`| respond 200 JSON with explicit length (raw buffers) |
-| `body_get_json ptr_var, len_var` | store POST body pointer/length into two `.bss` qwords |
+```nasm
+res.json ptr        ; 200, application/json
+res.text ptr        ; 200, text/plain
+res.html ptr        ; 200, text/html
+res.status code     ; status code, empty body (e.g. res.status 404)
+res.bytes ptr, len  ; 200 JSON with explicit length (raw buffers)
+res.content ptr     ; page.s @ DSL block: send the HTML shell whose glue
+                    ; renders the per-route wasm module
+```
+
+### Request (`req.`)
+
+```nasm
+req.path            ; current path buffer (property = `route`)
+req.method          ; method string "GET" (property)
+req.method_idx      ; rax = method index (GET=0, POST=1, DELETE=4, -1 unknown)
+req.body            ; rax = POST body ptr
+req.body_len        ; rax = POST body len
+req.get "key"       ; json_find over the body -> rax ptr, rdx len, rcx type
+req.has "key"       ; rax = 1 if the key exists, 0 otherwise
+req.slug            ; dynamic route slug: rdi = ptr, rsi = len ("" if none)
+```
+
+Keys passed as string literals (`req.get "user"`) are emitted inline with a
+jump-over-data pattern; labels work too (`req.get k_user`).
+
+### Framework (`asmx.`)
+
+```nasm
+asmx.listen PORT    ; bind + accept loop (code after runs per request)
+asmx.next           ; end the handler (jmp requests)
+```
+
+`requests` is a reserved symbol (the accept loop). Never define a label with
+that name.
+
+### Route registration
+
+```nasm
+route get, post, put, patch, delete   ; all five, 0 = not supported
+route.get h   route.post h   route.put h   route.patch h   route.delete h
+route.both get, post
+```
 
 ### Symbols
 
-| symbol | description |
-|--------|-------------|
-| `route` | buffer holding the current request path |
-| `requests` | the accept loop — `asmx.next` ends a handler |
-| `buffer` | 4096-byte request buffer |
-| `resp_buf` | 512-byte response header buffer |
-| `client_fd` | current connection fd |
-
-## Objects (dot notation)
-
-Assembly has no objects — but NASM macros do. The whole framework is
-exposed as objects with dot notation: properties are `%define` aliases
-(zero cost), methods are macros that call the existing functions.
-Everything resolves at assembly time.
-
-```
-asmx.          framework
-  asmx.listen PORT     bind + accept loop
-  asmx.next            end the handler (jmp requests)
-
-req.           current request
-  req.path             current path buffer (property)
-  req.method           method string "GET" (property)
-  req.method_idx       rax = method index (GET=0, POST=1)
-  req.body             rax = POST body ptr
-  req.body_len         rax = POST body len
-  req.get "key"        json_find over the body (rax/rdx/rcx, -1 if missing)
-  req.has "key"        rax = 1 if the key exists, 0 otherwise
-
-res.           response
-  res.json ptr         respond 200, application/json
-  res.text ptr         respond 200, text/plain
-  res.html ptr         respond 200, text/html
-  res.status code      respond with a status code, empty body
-  res.bytes ptr, len   respond 200 JSON, explicit length
-  res.content ptr      page.s @ DSL block: send the HTML shell whose glue
-                       renders the server-side UI nodes (see below)
-
-json.          json domain
-  json.parse buf, len
-  json.find buf, len, "key"
-  json.str_int value, dst
-  json.str_bool value, dst
-  json.str_null dst
-  json.str_string src, dst, cap
-
-route.         route registration (Next.js style)
-  route.get handler    register GET
-  route.post handler   register POST
-  route.put handler    register PUT
-  route.patch handler  register PATCH
-  route.delete handler register DELETE
-  route.both get, post register both
-```
-
-Keys passed as string literals (`req.get "user"`) are emitted inline with
-a jump-over-data pattern; labels work too (`req.get k_user`).
-
-## Pages & SSR
-
-`page.s` files are page routes with implicit GET. The page code is split
-between server and client concerns:
-
-- `section .SERVER` — the handler, runs on the server (SSR).
-- `section .CLIENT` — client assets registered with `client "PATH"`.
-- `ssr_render(template, dst, cap)` — copies the template and replaces the
-  `@client@` placeholder with `<script src="PATH"></script>` tags for every
-  client asset (snprintf-style: writes what fits in `cap` + null, returns
-  the total length).
-
-```nasm
-; src/app/page.s
-%include "asmx.inc"
-
-section .CLIENT
-    client "/app.js"
-
-section .data
-    index_tpl db '<h1>home</h1><p>assembled on the server</p>@client@', 0
-
-section .bss
-    html_buf resb 512
-
-page get_index
-
-section .SERVER
-get_index:
-    lea rdi, [index_tpl]
-    lea rsi, [html_buf]
-    mov rdx, 512
-    call ssr_render
-    res.html html_buf
-    asmx.next
-```
-
-`GET /` returns the fully assembled HTML with the client script tag
-injected — the server renders the page, exactly like SSR.
-
-WebAssembly modules are NOT client assets: a `<script src="app.wasm">`
-tag would make the browser parse the module as JS. Load them from the
-glue script instead:
-
-```html
-<script type="module">
-  const { instance } = await WebAssembly.instantiateStreaming(fetch('/app.wasm'));
-  instance.exports.init?.();
-</script>
-```
-
-The demo page (`src/ui/app.wat` -> `public/app.wasm` via `make`, path
-derived from the file like the routes) renders a pulsing ring + progress
-bar on a canvas — app state and every pixel come from the WASM module, JS
-is only the canvas glue. `src/ui/lib.wat` is the UI "macro" library
-(`$put_pixel`, `$clear`, `$fill_rect`, `$draw_ring`) — the Makefile
-includes it into every module automatically (WAT has no `%include`, so
-the build wraps `lib.wat` + the module inside one `(module ...)`).
-
-### Server UI nodes (the `@` DSL)
-
-A `page.s` can declare its UI directly in `.data` with the `@` DSL —
-Tailwind-ish classes, indentation = children, bare strings on their own
-line. It is NOT HTML: the build (`asmx/ui/compile.py`) compiles the
-block into a serialized UI node tree (the ASMXUIV1 wire format — the
-same 32-byte widget records the WASM runtime uses), an HTML shell, and
-an auto-registered `<route>.nodes` endpoint that serves the raw node
-blob (`Content-Type: application/asmx-ui`). The framework glue fetches
-it via `data-ui-src` and renders the tree to the DOM.
-
-```nasm
-; src/app/about/page.s  ->  GET /about
-%include "asmx.inc"
-
-section .data
-    about_content:
-        @main bg-black text-white min-h-screen p-8
-            @h1 text-4xl font-bold
-                "About o ASMX"
-            @p text-gray-400
-                "Fullstack Assembly + WebAssembly"
-        @end
-
-page get_about
-
-section .SERVER
-get_about:
-    res.content about_content
-    asmx.next
-```
-
-- Tags: `@main @div @section @nav @header @footer @h1 @h2 @h3 @p @span @a @button`.
-- Classes: `bg-<color> text-<color> text-<size> font-bold p-* m-* mt-* mb-* w-* min-h-screen` — same palette/sizes as `src/ui/*.ui` scenes.
-- `@theme bg #hex text #hex accent #hex` (optional, anywhere in the block).
-  Without it, the root view's `bg-*` becomes the page background —
-  `@main bg-black` renders a black page.
-- `res.content <label>` sends the generated shell (`<label>_shell`);
-  the blob itself is served at `<route>.nodes` — `curl /about.nodes`
-  returns the serialized UI IR, no HTML involved.
-- This is static server rendering (no events) — for interactive UI use
-  `src/ui/*.ui` components (`component "name"` + `data-modules`).
+| symbol     | description                                    |
+|------------|------------------------------------------------|
+| `route`    | buffer holding the current request path        |
+| `requests` | the accept loop — `asmx.next` ends a handler   |
+| `buffer`   | 4096-byte request buffer                       |
+| `resp_buf` | 512-byte response header buffer                |
+| `client_fd`| current connection fd                          |
 
 ### Section conventions
 
-| section  | use                                  | exec |
-|----------|--------------------------------------|------|
-| `.GET`   | GET API handler (`route.s`)          | yes  |
-| `.POST`  | POST API handler (`route.s`)         | yes  |
-| `.SERVER`| page handler (`page.s`, SSR)         | yes  |
-| `.CLIENT`| client assets (`client` macro)       | no   |
-
-## Terminal output
-
-The dev server logs like Next.js — colored startup banner and one line
-per request (no user code needed):
-
-```
-[ASMX]: listening on http://localhost:3000
-GET / 200 (508ms)
-GET /api/hello 200 (8ms)
-GET /missing 404 (6ms)
-POST /about 405 (7ms)
-```
-
-Colors: `[ASMX]` cyan bold, method+path bold, status green 2xx / yellow
-3xx / red 4xx+, duration gray. The duration is the real processing time:
-measured with `CLOCK_MONOTONIC` from when the request bytes arrive (right
-after the read in the accept loop) until the handler returns — idle wait
-between requests is not counted.
-
-### Handling a POST body
-
-```nasm
-; src/app/api/echo/route.s
-%include "asmx.inc"
-
-route.post post_echo
-
-section .POST
-post_echo:
-    req.body
-    mov rbx, rax          ; body ptr (callee-saved)
-    req.body_len
-    res.bytes rbx, rax    ; echo the body back
-    asmx.next
-```
-
-## Static files
-
-Any file in `public/` is served automatically when no route matches
-(GET only). MIME types and `Content-Length` are resolved from the file:
-
-```
-public/index.html   ->  GET /index.html   (text/html)
-public/app.wasm     ->  GET /app.wasm     (application/wasm)
-public/style.css    ->  GET /style.css    (text/css)
-```
-
-Supported extensions: `.wasm .html .css .js .png .jpg .jpeg .json .txt`
-(fallback: `application/octet-stream`). Directories are never served.
-Resolution order: declared routes > static fallback > custom 404.
+| section    | use                              | exec |
+|------------|----------------------------------|------|
+| `.GET`     | GET API handler (`route.s`)      | yes  |
+| `.POST`    | POST API handler (`route.s`)     | yes  |
+| `.PUT` / `.PATCH` / `.DELETE` | same        | yes  |
+| `.SERVER`  | page handler (`page.s`, SSR)     | yes  |
+| `.CLIENT`  | client assets (`client` macro)   | no   |
 
 ## JSON
 
-The `json/` domain parses and stringifies JSON without libc. Include
-`%include "json/json.inc"`.
-
-### Parsing and extracting fields
+`json.parse buf, len` validates a whole document (`rax` = 0 ok / -1
+invalid). `json.find buf, len, "key"` extracts a value: `rax` = value ptr,
+`rdx` = len, `rcx` = type (`JSON_T_*`), `-1` if missing. Strings come
+without quotes.
 
 ```nasm
 ; src/app/api/login/route.s
@@ -424,58 +479,43 @@ route.post post_login
 
 section .POST
 post_login:
-    ; req.get validates nothing - call json.parse explicitly if the
-    ; document must be rejected as a whole (malformed JSON):
-    ;   req.body / req.body_len / json.parse
+    ; reject malformed JSON first:
+    req.body
+    mov rbx, rax
+    req.body_len
+    mov rsi, rax
+    mov rdi, rbx
+    call json_parse          ; rax = 0 ok, -1 invalid
+    test rax, rax
+    jnz .bad
+    ; now read a field
     req.get "user"
     cmp rax, -1
     je .bad
-    ; rax = value ptr, rdx = value len, rcx = type (JSON_T_*)
-    ; (strings come without the surrounding quotes)
-    res.json ok
+    res.json ok              ; rax = value ptr, rdx = len, rcx = type
     asmx.next
 .bad:
     res.json bad
     asmx.next
 ```
 
-To validate the whole document before extracting (rejects malformed
-JSON with a 400):
+Stringifying primitives write at `rsi` and return the length in `rax` (no
+null terminator — concatenate into your own buffer):
 
 ```nasm
-    req.body
-    mov rbx, rax
-    req.body_len
-    mov rsi, rax
-    mov rdi, rbx
-    call json_parse        ; rax = 0 ok, -1 invalid
-    test rax, rax
-    jnz .bad_json
-```
-
-### Stringifying
-
-The stringifier primitives write at `rsi` and return the length in `rax`
-(no null terminator — concatenate into your own buffer):
-
-```nasm
-; build {"n":42,"ok":true} into a .bss buffer
-%include "asmx.inc"
-extern strcpy_adv            ; from common: (dest, src) -> dest+len
-
 section .data
-    open   db '{"n":', 0
-    comma  db ',"ok":', 0
-    close  db '}', 0
+    open  db '{"n":', 0
+    comma db ',"ok":', 0
+    close db '}', 0
 
 section .bss
     payload resb 128
 
-; in a handler:
+; inside a handler:
     lea rdi, [payload]
     lea rsi, [open]
     call strcpy_adv          ; rax = payload + 5
-    mov rbx, rax             ; write pos (callee-saved)
+    mov rbx, rax
     mov rdi, 42
     mov rsi, rbx
     call json_str_int        ; writes "42", rax = len
@@ -494,22 +534,46 @@ section .bss
     ; payload = {"n":42,"ok":true}
 ```
 
-| function | description |
-|----------|-------------|
-| `json_parse(buf, len)` | validate a JSON document; `0` ok, `-1` invalid |
-| `json_find(buf, len, key)` | `rax` = value ptr, `rdx` = len, `rcx` = type (`JSON_T_*`); `-1` if missing |
-| `json_str_int(value, dst)` | write an integer, return len |
-| `json_str_bool(0/1, dst)` | write `true`/`false`, return len |
-| `json_str_null(dst)` | write `null`, return len |
-| `json_str_string(src, dst, cap)` | write an escaped string (`"`, `\`, `\b\f\n\r\t`, controls as `\u00XX`); writes what fits in `cap`, returns the total length needed |
+The parser is a full RFC 8259 validator: `\uXXXX` escapes, numbers
+(`-1.5e3`), booleans/null, nested objects/arrays, depth limit 32, trailing
+garbage rejected.
 
-Value types (`rcx`): `JSON_T_STRING 0`, `JSON_T_NUMBER 1`, `JSON_T_OBJECT 2`,
-`JSON_T_ARRAY 3`, `JSON_T_BOOL 4`, `JSON_T_NULL 5`.
+## POST body
 
-The parser is a full RFC 8259 validator: strings with `\uXXXX` escapes,
-numbers (`-1.5e3`), `true`/`false`/`null`, nested objects/arrays, depth
-limit 32, trailing garbage rejected. Keys with escapes match literal
-equivalents (`"a\u0041"` matches key `aA`).
+```nasm
+; src/app/api/echo/route.s
+%include "asmx.inc"
+
+route.post post_echo
+
+section .POST
+post_echo:
+    req.body
+    mov rbx, rax             ; body ptr (callee-saved)
+    req.body_len
+    res.bytes rbx, rax       ; echo the body back
+    asmx.next
+```
+
+Or with explicit variables: `body_get_json req_body, req_len` stores the
+pointer/length into two `.bss` qwords.
+
+## Static files
+
+Any file in `static/` is served automatically when no route matches (GET
+only). MIME types and `Content-Length` are resolved from the file:
+
+```
+static/index.wasm        ->  GET /index.wasm      (application/wasm)
+static/sobre/page.wasm   ->  GET /sobre/page.wasm (application/wasm)
+static/profile/[id]/page.wasm -> GET /profile/[id]/page.wasm
+static/style.css         ->  GET /style.css       (text/css)
+```
+
+Supported extensions: `.wasm .html .css .js .png .jpg .jpeg .json .txt`
+(fallback: `application/octet-stream`). Directories are never served.
+Resolution order: declared routes > dynamic patterns > static fallback >
+custom 404.
 
 ## Custom 404 page
 
@@ -520,9 +584,9 @@ equivalents (`"a\u0041"` matches key `aA`).
 section .data
     nf db '<h1>404</h1><p>nothing here</p>', 0
 
-route.get nf_handler
+page nf_handler
 
-section .GET
+section .SERVER
 nf_handler:
     res.html nf
     asmx.next
@@ -530,37 +594,51 @@ nf_handler:
 
 ## Makefile
 
-The generated Makefile is zero-maintenance: every `.asm` under the
-framework and every `.asm`/`.s` under `src/` is discovered automatically.
-New routes and new framework modules build with no edits.
+The Makefile is zero-maintenance: every `.asm` in the framework and every
+`.asm`/`.s` under `src/` is discovered automatically. New routes and new
+framework modules build with no edits. The only exception is `asmx/ui/`,
+which is the @ DSL compiler build tool (never linked into the server).
 
-- `make` — build `build/server`
+- `make` — build `build/server` + all `static/**/page.wasm` modules
 - `make run` — build and run
 - `make clean` — remove build artifacts
+
+### Dynamic-route build details
+
+A `[id]` segment in a source path maps to the glob-safe `_id` directory in
+`build/` (the shell treats `[` as a glob char), while `ROUTE_PATH` keeps the
+literal `[id]` for the router pattern and the static output keeps the
+brackets: `static/profile/[id]/page.wasm`.
+
+## How it works
+
+- `src/main.asm` calls `asmx.listen 3000`, which grabs the return address as
+  the per-request handler, binds the socket and falls into the `requests`
+  accept loop: accept -> read -> parse request line + headers -> copy the
+  path into `route` -> dispatch.
+- The router scans a linker-generated section (`__start_route` /
+  `__stop_route`, 48-byte entries: path, GET, POST, PUT, PATCH, DELETE).
+  Exact match first, then dynamic `[id]` patterns (prefix + suffix match,
+  slug into `slug_buf`). No match -> `/_asmx` virtual files -> static
+  fallback (`static/`) -> custom 404.
+- Responses are built into `resp_buf` (status line + content-type +
+  content-length) and written with the body in two syscalls.
+- Frontend modules are plain WebAssembly: the glue JS is a tiny DOM syncer
+  (~5 KB) that reads the widget array from module memory and mirrors it into
+  the DOM.
+- Single-threaded, blocking accept loop. Concurrency (fork, epoll) is on
+  the roadmap.
 
 ## Testing
 
 ```bash
 curl -v http://localhost:3000/
 curl http://localhost:3000/api/hello
-curl http://localhost:3000/app.wasm        # static file
+curl http://localhost:3000/profile/joao       # dynamic route
+curl http://localhost:3000/sobre/page.wasm    # static file
 curl -X POST http://localhost:3000/api/echo -d '{"x":1}'
-curl http://localhost:3000/nonexistent     # custom 404
+curl http://localhost:3000/nonexistent        # custom 404
 ```
-
-## How it works
-
-- `main.asm` calls `listen 3000`, which grabs the return address as the
-  per-request handler, binds the socket and falls into the `requests`
-  accept loop: accept -> read -> parse request line + headers -> copy the
-  path into `route` -> dispatch.
-- The router scans a linker-generated section (`__start_route` /
-  `__stop_route`, 48-byte entries: path, GET, POST, PUT, PATCH, DELETE).
-  No match -> static fallback (`public/`) -> custom 404.
-- Responses are built into `resp_buf` (status line + content-type +
-  content-length) and written with the body in two syscalls.
-- Single-threaded, blocking accept loop. Concurrency (fork, epoll) is on
-  the roadmap.
 
 ## License
 
