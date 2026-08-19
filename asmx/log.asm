@@ -52,6 +52,7 @@ section .data
     banner_url  db 'http://localhost:', 0
     banner_post db 10, 0
     s_glue      db '/_asmx/glue.js', 0
+    s_events    db '/_asmx/events', 0
     br_err      db 'Error', 0
     br_colon    db ': port ', 0
     br_mid      db ' already in use, starting server at ', 0
@@ -206,6 +207,13 @@ log_request:
     lea rdi, [route]
     lea rsi, [s_glue]
     mov rdx, 14
+    call strncmp
+    test rax, rax
+    jz .first
+    ; /_asmx/events (hot-reload EventSource reconnect)
+    lea rdi, [route]
+    lea rsi, [s_events]
+    mov rdx, 13
     call strncmp
     test rax, rax
     jz .first
