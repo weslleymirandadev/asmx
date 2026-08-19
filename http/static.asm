@@ -39,6 +39,8 @@ http_serve_static:
     mov rdx, static_str_len
     call memcpy_adv           ; rax = path_buf + len
     mov rbx, rax              ; append dest
+    ; the path is copied verbatim - a dynamic route's wasm lives at the
+    ; literal [id] path (static/profile/[id]/page.wasm), same as the URL
     mov rdi, r14
     call strlen
     inc rax                   ; copy the null too
