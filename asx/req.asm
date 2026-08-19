@@ -1,15 +1,15 @@
-; src/asmx/req.asm
+; src/asx/req.asm
 ; Request object wrappers - hide the http state behind the dot-notation
 ; API (req.body, req.get, ...). The json domain stays pure: these wrappers
 ; are the only glue between http state and json_find.
 ;
 ; Exported:
-;   asmx_req_body()    -> rax = POST body ptr
-;   asmx_req_body_len() -> rax = POST body len
-;   asmx_req_get(rdi = key)  -> json_find over the body
+;   asx_req_body()    -> rax = POST body ptr
+;   asx_req_body_len() -> rax = POST body len
+;   asx_req_get(rdi = key)  -> json_find over the body
 ;                               rax = value ptr, rdx = len, rcx = type,
 ;                               rax = -1 if missing
-;   asmx_req_has(rdi = key)  -> rax = 1 if the key exists, 0 otherwise
+;   asx_req_has(rdi = key)  -> rax = 1 if the key exists, 0 otherwise
 
 %include "common/common.inc"
 
@@ -19,16 +19,16 @@ extern json_find
 
 section .text
 
-global asmx_req_body
-asmx_req_body:
+global asx_req_body
+asx_req_body:
     jmp http_get_body         ; tail call: rax = body ptr
 
-global asmx_req_body_len
-asmx_req_body_len:
+global asx_req_body_len
+asx_req_body_len:
     jmp http_get_body_len     ; tail call: rax = body len
 
-global asmx_req_get
-asmx_req_get:
+global asx_req_get
+asx_req_get:
     push rbx
     push r12
     mov r12, rdi              ; key (callee-saved)
@@ -43,9 +43,9 @@ asmx_req_get:
     pop rbx
     ret
 
-global asmx_req_has
-asmx_req_has:
-    call asmx_req_get
+global asx_req_has
+asx_req_has:
+    call asx_req_get
     cmp rax, -1
     je .no
     mov rax, 1

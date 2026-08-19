@@ -1,4 +1,4 @@
-# ASMX
+# ASX
 
 Fullstack web framework written in **x86-64 assembly (NASM)** for Linux.
 No libc, no runtime, no dependencies — just a static ELF binary that speaks
@@ -18,7 +18,7 @@ script instantiates the module and renders the widgets to the DOM.
 - GNU ld (`ld`)
 - GNU make (`make`)
 - WABT (`wat2wasm`)
-- git (for `asmx init`)
+- git (for `asx init`)
 
 ```bash
 sudo apt install nasm binutils wabt git -y
@@ -26,29 +26,29 @@ sudo apt install nasm binutils wabt git -y
 
 ## Quick start
 
-The easiest way to bootstrap a project is the [asmx-cli](https://github.com/weslleymirandadev/asmx-cli)
+The easiest way to bootstrap a project is the [asx-cli](https://github.com/weslleymirandadev/asx-cli)
 tool — the "npm" for this framework. Build it, then scaffold:
 
 ```bash
-git clone https://github.com/weslleymirandadev/asmx-cli.git
-cd asmx-cli && make          # produces build/asmx
-sudo ln -s "$PWD/build/asmx" /usr/local/bin/asmx   # optional
+git clone https://github.com/weslleymirandadev/asx-cli.git
+cd asx-cli && make          # produces build/asx
+sudo ln -s "$PWD/build/asx" /usr/local/bin/asx   # optional
 
 mkdir myapp && cd myapp
-asmx init myapp              # clones the framework + scaffolds a project
+asx init myapp              # clones the framework + scaffolds a project
 
 # Build the server
 make
 ./build/server
 
 # Build and run
-asmx dev
+asx dev
 ```
 
 That's it. The server listens on port 3000:
 
 ```
-[ASMX]: listening on http://localhost:3000
+[ASX]: listening on http://localhost:3000
 ```
 
 The dev server logs one line per request:
@@ -60,17 +60,17 @@ GET /missing 404 (61μs)
 POST /about 405 (54μs)
 ```
 
-With the CLI (`asmx dev`) it also watches sources, rebuilds on change and
-hot-reloads the browser via the `/_asmx/events` stream (see Hot reload
+With the CLI (`asx dev`) it also watches sources, rebuilds on change and
+hot-reloads the browser via the `/_asx/events` stream (see Hot reload
 below).
 
 ## Project structure
 
 ```
 myapp/
-├── asmx/                  <- the framework
-│   ├── asmx.inc           <- public API: macros + externs (include this)
-│   ├── asmx/              <- core: listen loop, router, senders, state
+├── asx/                  <- the framework
+│   ├── asx.inc           <- public API: macros + externs (include this)
+│   ├── asx/              <- core: listen loop, router, senders, state
 │   ├── common/            <- syscalls, strings, macros, errors
 │   ├── http/              <- HTTP parsing, MIME, static files
 │   ├── json/              <- JSON parser + stringifier
@@ -107,11 +107,11 @@ The Makefile passes it to the assembler via `-DROUTE_PATH`.
 
 ### Minimal page
 
-Pages run in `section .SERVER` and end with `asmx.next`:
+Pages run in `section .SERVER` and end with `asx.next`:
 
 ```nasm
 ; src/app/page.s  ->  GET /
-; asmx.inc is pre-included by the Makefile
+; asx.inc is pre-included by the Makefile
 
 section .data
     home_html db '<h1>hello from assembly</h1>', 0
@@ -121,7 +121,7 @@ page get_home
 section .SERVER
 get_home:
     res.html home_html
-    asmx.next
+    asx.next
 ```
 
 A `page` route is GET-only — POST yields an automatic 405.
@@ -135,7 +135,7 @@ path, or answer directly. It lives at the same level as `app/` and
 
 ```nasm
 ; src/middleware.s - protect /admin/* with a session cookie
-; asmx.inc is pre-included by the Makefile
+; asx.inc is pre-included by the Makefile
 
 middleware mw_auth
 
@@ -190,7 +190,7 @@ request, so the matcher check is up to you (as in Next.js `config.matcher`).
 
 ```nasm
 ; src/app/api/hello/route.s  ->  /api/hello
-; asmx.inc is pre-included by the Makefile
+; asx.inc is pre-included by the Makefile
 
 section .data
     hello db '{"hello": "world"}', 0
@@ -200,14 +200,14 @@ route.get get_hello
 section .GET
 get_hello:
     res.json hello
-    asmx.next
+    asx.next
 ```
 
 ### Route with all methods
 
 ```nasm
 ; src/app/api/user/route.s  ->  /api/user
-; asmx.inc is pre-included by the Makefile
+; asx.inc is pre-included by the Makefile
 
 section .data
     ok db '{"ok": true}', 0
@@ -217,30 +217,30 @@ route get_user, post_user, put_user, patch_user, delete_user
 section .GET
 get_user:
     res.json ok
-    asmx.next
+    asx.next
 
 section .POST
 post_user:
     res.json ok
-    asmx.next
+    asx.next
 
 section .PUT
 put_user:
     res.json ok
-    asmx.next
+    asx.next
 
 section .PATCH
 patch_user:
     res.json ok
-    asmx.next
+    asx.next
 
 section .DELETE
 delete_user:
     res.json ok
-    asmx.next
+    asx.next
 ```
 
-Every handler must end with `asmx.next` (back to the accept loop). A missing
+Every handler must end with `asx.next` (back to the accept loop). A missing
 handler (`0` in the route entry) yields an automatic `405 Method Not
 Allowed`. HEAD/OPTIONS are parsed but not dispatched yet (405). Single-method
 convenience macros: `route.get`, `route.post`, `route.put`, `route.patch`,
@@ -255,12 +255,12 @@ a WASM module that renders it in the browser.
 
 ```nasm
 ; src/app/about/page.s  ->  GET /about
-; asmx.inc is pre-included by the Makefile
+; asx.inc is pre-included by the Makefile
 
 section .data
     about_content:
         @main bg-black text-white min-h-screen p-8:
-            @h1 text-4xl: "About o ASMX"
+            @h1 text-4xl: "About o ASX"
             @p text-blue-500: "Fullstack Assembly + WebAssembly"
 
             @div bg-white w-10:
@@ -275,7 +275,7 @@ page get_about
 section .SERVER
 get_about:
     res.content about_content
-    asmx.next
+    asx.next
 ```
 
 - **Tags**: `@main @div @section @nav @header @footer @h1 @h2 @h3 @p @span
@@ -320,7 +320,7 @@ section .data
 ```
 
 The build recognizes the `count: N` text pattern and emits a hit-test +
-increment handler in the module (see `asmx/ui/literals.inc`).
+increment handler in the module (see `asx/ui/literals.inc`).
 
 ## Components (`@@name`)
 
@@ -366,7 +366,7 @@ etc.
 
 ```nasm
 ; src/app/profile/[id]/page.s  ->  GET /profile/<slug>
-; asmx.inc is pre-included by the Makefile
+; asx.inc is pre-included by the Makefile
 
 section .data
     profile_content:
@@ -383,7 +383,7 @@ page get_profile
 section .SERVER
 get_profile:
     res.content profile_content
-    asmx.next
+    asx.next
 ```
 
 How it works:
@@ -418,10 +418,10 @@ Each `@` block in a `page.s` goes through `build/tools/ui-compile` — a
 3. emits one `.wat` file per component + a `_main.wat` (render + theme +
    event wiring) into `build/<page>.s.d/`,
 4. rewrites the page with an **SSR HTML shell**:
-   `<div id="ui" data-asmx-root="..." data-asmx-checksum="...">` + the full
+   `<div id="ui" data-asx-root="..." data-asx-checksum="...">` + the full
    server-rendered widget tree + the state snapshot + the glue script tag.
 
-The Makefile then links the framework WAT lib (`asmx/wasm/*.wat`: draw,
+The Makefile then links the framework WAT lib (`asx/wasm/*.wat`: draw,
 text, widgets, components) + those `.wat` files into one module per page:
 `static/<route>/page.wasm` (root = `static/index.wasm`), via `cat | wat2wasm`.
 
@@ -440,7 +440,7 @@ The module exports (all framework-provided):
 | `set_count`/`get_count` | counter state accessors (hydration snapshot)  |
 | `handle_event` | (type, x, y, key) — clicks/mouse/keyboard dispatch   |
 
-`/_asmx/glue.js` is a virtual file served by the framework (no entry in
+`/_asx/glue.js` is a virtual file served by the framework (no entry in
 `static/`): it instantiates the module, applies the theme, syncs the widget
 tree to DOM (`View → div`, `Text → span`), forwards mouse/keyboard events,
 and polls `ui_dirty` to re-render on interaction.
@@ -450,30 +450,30 @@ and polls `ui_dirty` to re-render on interaction.
 The shell the server sends is not an empty container: `ui-compile` renders
 the **full widget tree as HTML** at build time (same IR as the WASM — the
 serialized blob + style records — so both backends cannot diverge by
-construction). Each widget gets a stable `data-asmx-id` (its record index,
+construction). Each widget gets a stable `data-asx-id` (its record index,
 deterministic pre-order) and inline CSS identical to what the glue would
 compute. The page also carries:
 
-- `data-asmx-root="<route>"` on `#ui` — the root id the runtime hydrates;
-- `data-asmx-checksum="<hex>"` — FNV-1a over the canonical IR (records
+- `data-asx-root="<route>"` on `#ui` — the root id the runtime hydrates;
+- `data-asx-checksum="<hex>"` — FNV-1a over the canonical IR (records
   with the text_ptr field skipped + strings in record order);
-- `<script type="application/asmx-state">` — the hydration snapshot
+- `<script type="application/asx-state">` — the hydration snapshot
   (minimal render state, e.g. `{"root":"index","count":0}`);
-- `<style data-asmx-base>` — the global reset + theme (`body` background
+- `<style data-asx-base>` — the global reset + theme (`body` background
   and color), served WITH the HTML so the first paint is already the
   final layout; the glue skips injecting its own copy when this tag is
   present (no layout flicker on reload).
 
 ```html
-<div id="ui" data-asmx-root="index" data-asmx-checksum="587c9529"
+<div id="ui" data-asx-root="index" data-asx-checksum="587c9529"
      data-modules="/index.wasm">
-  <div data-asmx-id="0" style="position:relative;display:flex;...">
-    <span data-asmx-id="1" style="...">OLHA O MACACO</span>
+  <div data-asx-id="0" style="position:relative;display:flex;...">
+    <span data-asx-id="1" style="...">OLHA O MACACO</span>
     ...
   </div>
 </div>
-<script type="application/asmx-state">{"root":"index","count":0}</script>
-<script type="module" src="/_asmx/glue.js"></script>
+<script type="application/asx-state">{"root":"index","count":0}</script>
+<script type="module" src="/_asx/glue.js"></script>
 ```
 
 The runtime is an explicit phase machine:
@@ -484,14 +484,14 @@ SSR  ->  HYDRATING  ->  INTERACTIVE
 
 During **HYDRATING** the glue:
 
-1. locates the root by `data-asmx-root` (falls back to client rendering
+1. locates the root by `data-asx-root` (falls back to client rendering
    when absent);
 2. parses the snapshot and restores the render state **before** the first
    render (`set_count`);
 3. recomputes the checksum in the module (`ssr_checksum`) and compares it
-   with `data-asmx-checksum` — a mismatch logs an `ASMX Hydration Error`
+   with `data-asx-checksum` — a mismatch logs an `ASX Hydration Error`
    with the server/client hashes;
-4. maps the SSR DOM by `data-asmx-id` and **reuses** those nodes — no
+4. maps the SSR DOM by `data-asx-id` and **reuses** those nodes — no
    structural changes unless a node is missing or its tag type diverges
    (that subtree alone is re-created, with a diagnostic);
 5. validates text per node (slug replacement happens here; `{slug}` in the
@@ -516,21 +516,21 @@ with JavaScript disabled.
 
 ### Hot reload (dev)
 
-The glue opens `/_asmx/events` (EventSource) which answers once with
+The glue opens `/_asx/events` (EventSource) which answers once with
 `retry: 250` and closes (the server is single-threaded). The browser
 reconnects on its own; each `onopen` re-fetches the wasm with
 `cache: "no-store"` and, if the bytes changed, re-instantiates and
-re-renders. `asmx dev` (the CLI) rebuilds on file change and the page
+re-renders. `asx dev` (the CLI) rebuilds on file change and the page
 updates without a manual refresh.
 
 ## Public API
 
-**No `%include` needed.** The Makefile pre-includes `asmx.inc` into every
+**No `%include` needed.** The Makefile pre-includes `asx.inc` into every
 `src/` file via NASM `-P` (see Makefile below) — just write your handlers.
-A manual `%include "asmx.inc"` in a src file is harmless (the file has an
+A manual `%include "asx.inc"` in a src file is harmless (the file has an
 `%ifndef` guard).
 
-Include `%include "asmx.inc"` in every route file if you assemble outside
+Include `%include "asx.inc"` in every route file if you assemble outside
 the Makefile.
 
 ### Response (`res.`)
@@ -561,11 +561,11 @@ req.slug            ; dynamic route slug: rdi = ptr, rsi = len ("" if none)
 Keys passed as string literals (`req.get "user"`) are emitted inline with a
 jump-over-data pattern; labels work too (`req.get k_user`).
 
-### Framework (`asmx.`)
+### Framework (`asx.`)
 
 ```nasm
-asmx.listen PORT    ; bind + accept loop (code after runs per request)
-asmx.next           ; end the handler (jmp requests)
+asx.listen PORT    ; bind + accept loop (code after runs per request)
+asx.next           ; end the handler (jmp requests)
 ```
 
 `requests` is a reserved symbol (the accept loop). Never define a label with
@@ -584,7 +584,7 @@ route.both get, post
 | symbol     | description                                    |
 |------------|------------------------------------------------|
 | `route`    | buffer holding the current request path        |
-| `requests` | the accept loop — `asmx.next` ends a handler   |
+| `requests` | the accept loop — `asx.next` ends a handler   |
 | `buffer`   | 4096-byte request buffer                       |
 | `resp_buf` | 512-byte response header buffer                |
 | `client_fd`| current connection fd                          |
@@ -608,7 +608,7 @@ without quotes.
 
 ```nasm
 ; src/app/api/login/route.s
-; asmx.inc is pre-included by the Makefile
+; asx.inc is pre-included by the Makefile
 
 section .data
     bad db '{"error": "invalid json"}', 0
@@ -632,10 +632,10 @@ post_login:
     cmp rax, -1
     je .bad
     res.json ok              ; rax = value ptr, rdx = len, rcx = type
-    asmx.next
+    asx.next
 .bad:
     res.json bad
-    asmx.next
+    asx.next
 ```
 
 Stringifying primitives write at `rsi` and return the length in `rax` (no
@@ -681,7 +681,7 @@ garbage rejected.
 
 ```nasm
 ; src/app/api/echo/route.s
-; asmx.inc is pre-included by the Makefile
+; asx.inc is pre-included by the Makefile
 
 route.post post_echo
 
@@ -691,7 +691,7 @@ post_echo:
     mov rbx, rax             ; body ptr (callee-saved)
     req.body_len
     res.bytes rbx, rax       ; echo the body back
-    asmx.next
+    asx.next
 ```
 
 Or with explicit variables: `body_get_json req_body, req_len` stores the
@@ -718,7 +718,7 @@ custom 404.
 
 ```nasm
 ; src/app/not-found.s
-; asmx.inc is pre-included by the Makefile
+; asx.inc is pre-included by the Makefile
 
 section .data
     nf db '<h1>404</h1><p>nothing here</p>', 0
@@ -728,27 +728,27 @@ page nf_handler
 section .SERVER
 nf_handler:
     res.html nf
-    asmx.next
+    asx.next
 ```
 
 ## Makefile
 
 The Makefile is zero-maintenance: every `.asm` in the framework and every
 `.asm`/`.s` under `src/` is discovered automatically. New routes and new
-framework modules build with no edits. The only exception is `asmx/ui/`,
+framework modules build with no edits. The only exception is `asx/ui/`,
 which is the @ DSL compiler build tool (never linked into the server).
 
 - `make` — build `build/server` + all `static/**/page.wasm` modules
 - `make run` — build and run
 - `make clean` — remove build artifacts
 
-### Automatic `asmx.inc` pre-include
+### Automatic `asx.inc` pre-include
 
-App files (`src/`) are assembled with NASM `-P asmx/asmx.inc`, so you never
-write `%include "asmx.inc"` by hand. The framework (`asmx/**`) and the
+App files (`src/`) are assembled with NASM `-P asx/asx.inc`, so you never
+write `%include "asx.inc"` by hand. The framework (`asx/**`) and the
 ui-compile tool are NOT pre-included: they declare their own externs and a
 pre-include would conflict (extern vs global on the same symbol). A manual
-`%include` in a src file still works (the `%ifndef` guard in asmx.inc makes
+`%include` in a src file still works (the `%ifndef` guard in asx.inc makes
 it idempotent).
 
 ### Dynamic-route build details
@@ -760,14 +760,14 @@ brackets: `static/profile/[id]/page.wasm`.
 
 ## How it works
 
-- `src/main.asm` calls `asmx.listen 3000`, which grabs the return address as
+- `src/main.asm` calls `asx.listen 3000`, which grabs the return address as
   the per-request handler, binds the socket and falls into the `requests`
   accept loop: accept -> read -> parse request line + headers -> copy the
   path into `route` -> dispatch.
 - The router scans a linker-generated section (`__start_route` /
   `__stop_route`, 48-byte entries: path, GET, POST, PUT, PATCH, DELETE).
   Exact match first, then dynamic `[id]` patterns (prefix + suffix match,
-  slug into `slug_buf`). No match -> `/_asmx` virtual files -> static
+  slug into `slug_buf`). No match -> `/_asx` virtual files -> static
   fallback (`static/`) -> custom 404.
 - Responses are built into `resp_buf` (status line + content-type +
   content-length) and written with the body in two syscalls.

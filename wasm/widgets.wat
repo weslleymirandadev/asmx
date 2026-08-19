@@ -1,4 +1,4 @@
-;; asmx/wasm/widgets.wat - declarative widget system (RN-like).
+;; asx/wasm/widgets.wat - declarative widget system (RN-like).
 ;; Components call $view/$text and compose parents/children via the
 ;; returned index; module exports widgets()/widget_count() and the JS
 ;; glue renders HTML/CSS. struct 32B: type u8 (0=view 1=text 2=canvas),
@@ -32,7 +32,7 @@
 ;; every 32B record EXCEPT bytes [16..20) (text_ptr: relative in the
 ;; build-time blob, absolute address here), then every string in record
 ;; order (up to, not including, the null). The server embeds the same
-;; hash in data-asmx-checksum (ui/ssr.asm) - the glue compares both to
+;; hash in data-asx-checksum (ui/ssr.asm) - the glue compares both to
 ;; detect SSR <-> module divergence. Must match ui/ssr.asm ssr_hash.
 (func (export "ssr_checksum") (result i32)
   (local $h i32) (local $i i32) (local $j i32) (local $b i32)

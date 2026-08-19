@@ -1,5 +1,5 @@
-; src/asmx/state.asm
-; asmx shared state - single source of truth for data/bss
+; src/asx/state.asm
+; asx shared state - single source of truth for data/bss
 ; Do NOT %include this file - reference its symbols via extern.
 ; This is the ONLY file that defines these symbols.
 
@@ -17,7 +17,7 @@ section .data
     ct_text_len equ $ - ct_text
     ct_html     db "Content-Type: text/html", 13, 10
     ct_html_len equ $ - ct_html
-    ct_ui       db "Content-Type: application/asmx-ui", 13, 10
+    ct_ui       db "Content-Type: application/asx-ui", 13, 10
     ct_ui_len   equ $ - ct_ui
 
     cl_prefix   db "Content-Length: ", 0
@@ -48,7 +48,7 @@ global cc_nocache
 section .bss
     server_fd    resq 1
     client_fd    resq 1
-    asmx_handler resq 1
+    asx_handler resq 1
     buffer       resb 4096
     route        resb 256
     slug_buf     resb 256
@@ -64,5 +64,5 @@ global ct_ui, ct_ui_len
 global cl_prefix, crlf2, conn_close
 global status_table, status_count
 global http_prefix, cl_zero
-global server_fd, client_fd, asmx_handler
+global server_fd, client_fd, asx_handler
 global buffer, route, slug_buf, slug_len, resp_buf, itoa_buf

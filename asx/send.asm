@@ -1,5 +1,5 @@
-; src/asmx/send.asm
-; asmx response senders - build header in resp_buf, write header + body.
+; src/asx/send.asm
+; asx response senders - build header in resp_buf, write header + body.
 ; The status line comes from [resp_status] (state.asm, default 200) so
 ; the router can send a custom 404 body (not-found route).
 
@@ -15,24 +15,24 @@ extern http_prefix, cl_zero
 extern status_table, status_count
 extern memcpy_adv, strcpy_adv
 
-; asmx_send_json/text/html(rdi = body) - respond with the current status
-global asmx_send_json
-asmx_send_json:
+; asx_send_json/text/html(rdi = body) - respond with the current status
+global asx_send_json
+asx_send_json:
     lea rsi, [ct_json]
     mov rdx, ct_json_len
-    jmp asmx_send_common
+    jmp asx_send_common
 
-global asmx_send_text
-asmx_send_text:
+global asx_send_text
+asx_send_text:
     lea rsi, [ct_text]
     mov rdx, ct_text_len
-    jmp asmx_send_common
+    jmp asx_send_common
 
-global asmx_send_html
-asmx_send_html:
+global asx_send_html
+asx_send_html:
     lea rsi, [ct_html]
     mov rdx, ct_html_len
-    jmp asmx_send_common
+    jmp asx_send_common
 
 ; write_status_line() - writes "HTTP/1.1 <code><reason>\r\n" at [r15]
 ; using [resp_status] and status_table; r15 = advanced pos.
@@ -85,12 +85,12 @@ write_status_line:
     mov r15, rax
     ret
 
-; asmx_send_common(rdi = body, rsi = content-type, rdx = ct_len)
-; asmx_send_bytes(rdi = body, rsi = body_len, rdx = content-type, rcx = ct_len)
+; asx_send_common(rdi = body, rsi = content-type, rdx = ct_len)
+; asx_send_bytes(rdi = body, rsi = body_len, rdx = content-type, rcx = ct_len)
 ; Both build the header in resp_buf (write pos tracked in r15), then write
 ; header + body to client_fd. send_bytes takes an explicit length so raw
 ; request bodies (no null terminator) can be echoed back.
-asmx_send_common:
+asx_send_common:
     push rbx
     push r12
     push r13
@@ -106,8 +106,8 @@ asmx_send_common:
     mov rbx, rax                  ; body len
     jmp send_build
 
-global asmx_send_bytes
-asmx_send_bytes:
+global asx_send_bytes
+asx_send_bytes:
     push rbx
     push r12
     push r13
@@ -175,9 +175,9 @@ send_build:
     pop rbx
     ret
 
-; asmx_send_status(rdi = code) - respond with a status code, empty body
-global asmx_send_status
-asmx_send_status:
+; asx_send_status(rdi = code) - respond with a status code, empty body
+global asx_send_status
+asx_send_status:
     push rbx
     push r12
     push r13
@@ -210,10 +210,10 @@ asmx_send_status:
     pop rbx
     ret
 
-; asmx_send_redirect(rdi = location) - respond 302 Found with a Location
+; asx_send_redirect(rdi = location) - respond 302 Found with a Location
 ; header and an empty body. Used by the middleware (mw.redirect).
-global asmx_send_redirect
-asmx_send_redirect:
+global asx_send_redirect
+asx_send_redirect:
     push rbx
     push r12
     push r15

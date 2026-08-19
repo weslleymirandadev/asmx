@@ -1,4 +1,4 @@
-; src/asmx/router.asm
+; src/asx/router.asm
 ; Next.js-style router - dispatches the current request to the handler
 ; registered for its path + method.
 ;
@@ -30,7 +30,7 @@ extern http_serve_static
 extern strcmp
 extern strncmp
 extern strlen
-extern asmx_send_status
+extern asx_send_status
 extern resp_status
 extern requests
 extern wasm_glue_serve
@@ -40,8 +40,8 @@ extern slug_len
 
 section .data
     nf_route_path db "/__not_found", 0
-    glue_path     db "/_asmx/glue.js", 0
-    events_path   db "/_asmx/events", 0
+    glue_path     db "/_asx/glue.js", 0
+    events_path   db "/_asx/events", 0
 
 section .text
 
@@ -102,12 +102,12 @@ middleware_continue:
     jmp rax
 .method_not_allowed:
     mov rdi, 405
-    call asmx_send_status
+    call asx_send_status
     pop r13
     pop r12
     jmp requests
 .not_found:
-    ; framework virtual file: /_asmx/events - the hot-reload event stream
+    ; framework virtual file: /_asx/events - the hot-reload event stream
     ; (EventSource; answers + closes, the browser reconnects on its own)
     lea rdi, [events_path]
     lea rsi, [route]
@@ -119,7 +119,7 @@ middleware_continue:
     pop r12
     jmp requests
 .glue_check:
-    ; framework virtual file: /_asmx/glue.js (the WASM UI renderer) -
+    ; framework virtual file: /_asx/glue.js (the WASM UI renderer) -
     ; no public/ entry needed, the glue is part of the framework
     lea rdi, [glue_path]
     lea rsi, [route]
@@ -164,7 +164,7 @@ middleware_continue:
     jmp rax
 .nf_default:
     mov rdi, 404
-    call asmx_send_status
+    call asx_send_status
     pop r13
     pop r12
     jmp requests

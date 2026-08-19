@@ -1,15 +1,15 @@
-; src/asmx/core.asm
-; asmx runtime - the framework engine
+; src/asx/core.asm
+; asx runtime - the framework engine
 ;
 ; Flow:
-;   user code:  listen 3000          -> asmx_listen grabs return address as
+;   user code:  listen 3000          -> asx_listen grabs return address as
 ;                                      handler, creates socket, falls into
 ;                                      `requests` accept loop
 ;   requests:   accept -> read -> parse -> copy path to `route` -> jmp handler
 ;   handler:    user code (cmp route / send_json / ...) ends with `jmp requests`
 ;
 ; Exported for user apps:
-;   asmx_listen, requests (accept loop label)
+;   asx_listen, requests (accept loop label)
 
 %include "common/common.inc"
 %include "net/net.inc"
@@ -23,7 +23,7 @@ extern strlen
 extern strncpy
 extern accept_error
 extern read_error
-extern server_fd, client_fd, asmx_handler
+extern server_fd, client_fd, asx_handler
 extern buffer, route, resp_status
 extern log_banner, log_bind_retry, log_bind_giveup, log_request, clock_start
 
@@ -44,16 +44,16 @@ section .data
 section .text
 
 ; ----------------------------------------------------------------------
-; asmx_listen(port) - never returns
+; asx_listen(port) - never returns
 ; Arguments: rdi = port (host byte order)
 ; Grabs the return address (user handler) from the stack, creates the
 ; listening socket, prints a startup banner, then falls through into
 ; the `requests` accept loop.
 ; ----------------------------------------------------------------------
-global asmx_listen
-asmx_listen:
+global asx_listen
+asx_listen:
     pop rax
-    mov [asmx_handler], rax
+    mov [asx_handler], rax
     mov r12, rdi                  ; port (r12 callee-saved)
 
     ; Reset SIGINT/SIGTERM to DEFAULT: the parent environment may leave
@@ -209,7 +209,7 @@ requests:
     mov qword [resp_status], 200
 
     ; Dispatch to the user handler (never returns - handler jmps to requests)
-    mov rax, [asmx_handler]
+    mov rax, [asx_handler]
     jmp rax
 
 .read_close:

@@ -1,8 +1,8 @@
-; __asmx__/asmx.inc
-; asmx - mini web framework over the assembly HTTP server
-; Package root: __asmx__/ (npm-style). App code lives in src/
+; __asx__/asx.inc
+; asx - mini web framework over the assembly HTTP server
+; Package root: __asx__/ (npm-style). App code lives in src/
 ; (src/main.asm + src/app/**/route.s). Include from anywhere with
-;   %include "asmx.inc"     (ASFLAGS: -I __asmx__)
+;   %include "asx.inc"     (ASFLAGS: -I __asx__)
 ;
 ; Usage in your app (current pattern - port 3000 by default):
 ;
@@ -12,7 +12,7 @@
 ;   section .text
 ;   global _start
 ;   _start:
-;       asmx.listen 3000      ; bind + accept loop
+;       asx.listen 3000      ; bind + accept loop
 ;       jmp route_dispatch    ; Next.js-style file routing
 ;
 ;   ; Routes: `route get_h, post_h, ...` for APIs (section .GET/.POST),
@@ -22,10 +22,10 @@
 ;   ;   section .POST
 ;   ;   post_h:
 ;   ;       res.json my_json
-;   ;       asmx.next
+;   ;       asx.next
 ;
 ;   ; UI lives IN the page.s, declared with the @ DSL (tailwind-like):
-;   ; asmx/ui/ui-compile (pure assembly, zero Python) pre-processes the
+;   ; asx/ui/ui-compile (pure assembly, zero Python) pre-processes the
 ;   ; @ block into (1) the HTML shell <label>_shell (data-modules),
 ;   ; (2) one .wat per component, (3) a _main.wat; the Makefile links
 ;   ; the framework wasm lib + those .wat -> static/<route>/page.wasm
@@ -36,7 +36,7 @@
 ;   ;       about_content:
 ;   ;           @main bg-black text-white min-h-screen p-8
 ;   ;               @h1 text-4xl font-bold
-;   ;                   "About ASMX"
+;   ;                   "About ASX"
 ;   ;               @p text-gray-400
 ;   ;                   "Fullstack Assembly + WebAssembly"
 ;   ;           @end
@@ -46,14 +46,14 @@
 ;   ;   section .SERVER
 ;   ;   get_about:
 ;   ;       res.content about_content
-;   ;       asmx.next
+;   ;       asx.next
 ;
 ; NOTE: `requests` is a reserved symbol (the accept loop). Do NOT define
 ; a label named `requests` in your app - use `jmp requests` (or
-; `asmx.next`) to return to the accept loop after responding.
+; `asx.next`) to return to the accept loop after responding.
 
-%ifndef ASMX_INC
-%define ASMX_INC
+%ifndef ASX_INC
+%define ASX_INC
 
 %include "common/common.inc"
 %include "net/net.inc"
@@ -61,21 +61,21 @@
 %include "json/json.inc"
 
 ; ----------------------------------------------------------------------
-; Public API (defined in src/asmx/*.asm)
+; Public API (defined in src/asx/*.asm)
 ; ----------------------------------------------------------------------
-; core.asm    : asmx_listen, requests (accept loop label)
+; core.asm    : asx_listen, requests (accept loop label)
 ; router.asm  : route_dispatch (Next.js-style path+method dispatch)
-; send.asm    : asmx_send_json, asmx_send_text, asmx_send_html, asmx_send_status
+; send.asm    : asx_send_json, asx_send_text, asx_send_html, asx_send_status
 ; state.asm   : route (current path buffer), buffer, resp_buf, client_fd,
 ;               http_200, ct_json, ct_text, ct_html, status_table...
 ; helpers.asm : memcpy_adv, strcpy_adv (internal)
-extern asmx_listen
-extern asmx_send_json
-extern asmx_send_text
-extern asmx_send_html
-extern asmx_send_status
-extern asmx_send_bytes
-extern asmx_send_redirect
+extern asx_listen
+extern asx_send_json
+extern asx_send_text
+extern asx_send_html
+extern asx_send_status
+extern asx_send_bytes
+extern asx_send_redirect
 extern route_dispatch
 extern middleware_continue
 extern route
@@ -89,15 +89,15 @@ extern http_get_body_len
 ; Request headers/cookies (http/headers.asm) - for the middleware
 extern http_get_header
 extern http_get_cookie
-; Request object wrappers (asmx/req.asm) + method string buffer
-extern asmx_req_body
-extern asmx_req_body_len
-extern asmx_req_get
-extern asmx_req_has
+; Request object wrappers (asx/req.asm) + method string buffer
+extern asx_req_body
+extern asx_req_body_len
+extern asx_req_get
+extern asx_req_has
 extern http_req_method
-; SSR helper (asmx/ssr.asm)
+; SSR helper (asx/ssr.asm)
 extern ssr_render
-; Helpers (asmx/helpers.asm)
+; Helpers (asx/helpers.asm)
 extern strcpy_adv
 ; JSON domain (json/*.asm) - available through the json. object macros
 extern json_parse
@@ -106,7 +106,7 @@ extern json_str_int
 extern json_str_bool
 extern json_str_null
 extern json_str_string
-; Content-type templates (asmx/state.asm) - used by send_*_bytes macros
+; Content-type templates (asx/state.asm) - used by send_*_bytes macros
 extern ct_json, ct_json_len
 extern ct_ui, ct_ui_len
 
@@ -116,7 +116,7 @@ extern ct_ui, ct_ui_len
 ; ----------------------------------------------------------------------
 %macro listen 1
     mov rdi, %1
-    call asmx_listen          ; never returns
+    call asx_listen          ; never returns
 %endmacro
 
 ; ----------------------------------------------------------------------
@@ -145,17 +145,17 @@ extern ct_ui, ct_ui_len
 ; ----------------------------------------------------------------------
 %macro send_json 1
     mov rdi, %1
-    call asmx_send_json
+    call asx_send_json
 %endmacro
 
 %macro send_text 1
     mov rdi, %1
-    call asmx_send_text
+    call asx_send_text
 %endmacro
 
 %macro send_html 1
     mov rdi, %1
-    call asmx_send_html
+    call asx_send_html
 %endmacro
 
 ; ----------------------------------------------------------------------
@@ -164,7 +164,7 @@ extern ct_ui, ct_ui_len
 ; ----------------------------------------------------------------------
 %macro send_status 1
     mov rdi, %1
-    call asmx_send_status
+    call asx_send_status
 %endmacro
 
 ; ----------------------------------------------------------------------
@@ -176,7 +176,7 @@ extern ct_ui, ct_ui_len
     mov rsi, %2
     lea rdx, [ct_json]
     mov rcx, ct_json_len
-    call asmx_send_bytes
+    call asx_send_bytes
 %endmacro
 
 ; ----------------------------------------------------------------------
@@ -214,11 +214,11 @@ extern ct_ui, ct_ui_len
 ;   src/app/api/hello/route.s -> "/api/hello"
 ;   src/app/not-found.s       -> "/__not_found" (reserved 404 route)
 ; Static files are NOT routes: anything in static/ is served automatically
-; by the router fallback (asmx/router.asm), no route declaration needed.
+; by the router fallback (asx/router.asm), no route declaration needed.
 ;
 ; Emits one 24-byte entry in the `route` section (dq path, GET, POST);
 ; GNU ld defines __start_route/__stop_route over it and the router
-; (asmx/router.asm) scans it to dispatch. `.GET`/`.POST` are pre-declared
+; (asx/router.asm) scans it to dispatch. `.GET`/`.POST` are pre-declared
 ; as CODE sections below - NASM defaults unknown section names to DATA,
 ; which would make handlers non-executable (segfault).
 ; ----------------------------------------------------------------------
@@ -286,8 +286,8 @@ section .MIDDLEWARE exec progbits align=16
 ; Properties are %define aliases (zero cost), methods are %macro wrappers
 ; around the existing functions. Everything resolves at assembly time.
 ;
-;   asmx.listen PORT     bind + accept loop (alias of `listen`)
-;   asmx.next            end the handler (jmp requests)
+;   asx.listen PORT     bind + accept loop (alias of `listen`)
+;   asx.next            end the handler (jmp requests)
 ;
 ;   req.path             current path buffer (property)
 ;   req.method           method string "GET" (property)
@@ -301,7 +301,7 @@ section .MIDDLEWARE exec progbits align=16
 ;   res.status CODE           respond with a status code, empty body
 ;   res.bytes PTR, LEN        respond 200 JSON, explicit length
 ;   res.content PTR           page.s @ DSL block: sends the HTML shell
-;                             (<label>_shell built by asmx/ui/ui-compile)
+;                             (<label>_shell built by asx/ui/ui-compile)
 ;                             whose glue loads <route>/page.wasm (the
 ;                             per-route UI module from static/).
 ;
@@ -314,12 +314,12 @@ section .MIDDLEWARE exec progbits align=16
 ;   route.patch HANDLER / route.delete HANDLER / route.both GET, POST
 ;   (or route GET, POST, PUT, PATCH, DELETE - 0 = not supported)
 ; ----------------------------------------------------------------------
-%macro asmx.listen 1
+%macro asx.listen 1
     mov rdi, %1
-    call asmx_listen
+    call asx_listen
 %endmacro
 
-%macro asmx.next 0
+%macro asx.next 0
     jmp requests
 %endmacro
 
@@ -339,11 +339,11 @@ section .MIDDLEWARE exec progbits align=16
 %endmacro
 
 %macro req.body 0
-    call asmx_req_body
+    call asx_req_body
 %endmacro
 
 %macro req.body_len 0
-    call asmx_req_body_len
+    call asx_req_body_len
 %endmacro
 
 %macro req.get 1
@@ -355,7 +355,7 @@ section .MIDDLEWARE exec progbits align=16
     %else
         lea rdi, [%1]
     %endif
-    call asmx_req_get
+    call asx_req_get
 %endmacro
 
 %macro req.has 1
@@ -367,27 +367,27 @@ section .MIDDLEWARE exec progbits align=16
     %else
         lea rdi, [%1]
     %endif
-    call asmx_req_has
+    call asx_req_has
 %endmacro
 
 %macro res.json 1
     mov rdi, %1
-    call asmx_send_json
+    call asx_send_json
 %endmacro
 
 %macro res.text 1
     mov rdi, %1
-    call asmx_send_text
+    call asx_send_text
 %endmacro
 
 %macro res.html 1
     mov rdi, %1
-    call asmx_send_html
+    call asx_send_html
 %endmacro
 
 %macro res.status 1
     mov rdi, %1
-    call asmx_send_status
+    call asx_send_status
 %endmacro
 
 %macro res.bytes 2
@@ -395,12 +395,12 @@ section .MIDDLEWARE exec progbits align=16
     mov rsi, %2
     lea rdx, [ct_json]
     mov rcx, ct_json_len
-    call asmx_send_bytes
+    call asx_send_bytes
 %endmacro
 
 ; ----------------------------------------------------------------------
 ; res.content PTR - send the page shell of an @ DSL block (page.s).
-; The @ block compiler (asmx/ui/ui-compile) generates, next to the UI
+; The @ block compiler (asx/ui/ui-compile) generates, next to the UI
 ; shell <label>_shell (the page container with
 ; data-modules="/<route>[/page].wasm" + the framework glue script) and
 ; one .wat per component + a _main.wat. The Makefile links them with
@@ -409,7 +409,7 @@ section .MIDDLEWARE exec progbits align=16
 ; ----------------------------------------------------------------------
 %macro res.content 1
     mov rdi, %1%+_shell
-    call asmx_send_html
+    call asx_send_html
 %endmacro
 
 %macro json.parse 2
@@ -500,7 +500,7 @@ section .MIDDLEWARE exec progbits align=16
     %else
         lea rdi, [%1]
     %endif
-    call asmx_send_redirect
+    call asx_send_redirect
     jmp requests
 %endmacro
 
@@ -527,25 +527,25 @@ section .MIDDLEWARE exec progbits align=16
 ; ----------------------------------------------------------------------
 %macro mw.status 1
     mov rdi, %1
-    call asmx_send_status
+    call asx_send_status
     jmp requests
 %endmacro
 
 %macro mw.json 1
     mov rdi, %1
-    call asmx_send_json
+    call asx_send_json
     jmp requests
 %endmacro
 
 %macro mw.text 1
     mov rdi, %1
-    call asmx_send_text
+    call asx_send_text
     jmp requests
 %endmacro
 
 %macro mw.html 1
     mov rdi, %1
-    call asmx_send_html
+    call asx_send_html
     jmp requests
 %endmacro
 

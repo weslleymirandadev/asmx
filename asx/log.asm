@@ -1,8 +1,8 @@
-; src/asmx/log.asm
+; src/asx/log.asm
 ; Terminal logging: colored startup banner + per-request log lines in
 ; Next.js dev-server style, e.g.:
 ;
-;   [ASMX] : listening on http://localhost:3000
+;   [ASX] : listening on http://localhost:3000
 ;   GET /api/hello 200 (2ms)
 ;   GET / 200 (0ms)
 ;
@@ -47,12 +47,12 @@ section .data
     min_s       db 's)', 10, 0
 
     banner_pre  db 10, 0
-    banner_name db '[ASMX]', 0
+    banner_name db '[ASX]', 0
     banner_mid  db ': listening on ', 0
     banner_url  db 'http://localhost:', 0
     banner_post db 10, 0
-    s_glue      db '/_asmx/glue.js', 0
-    s_events    db '/_asmx/events', 0
+    s_glue      db '/_asx/glue.js', 0
+    s_events    db '/_asx/events', 0
     br_err      db 'Error', 0
     br_colon    db ': port ', 0
     br_mid      db ' already in use, starting server at ', 0
@@ -210,7 +210,7 @@ log_request:
     call strncmp
     test rax, rax
     jz .first
-    ; /_asmx/events (hot-reload EventSource reconnect)
+    ; /_asx/events (hot-reload EventSource reconnect)
     lea rdi, [route]
     lea rsi, [s_events]
     mov rdx, 13

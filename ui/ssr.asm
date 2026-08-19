@@ -3,14 +3,14 @@
 ; =============================================================================
 ; The @ DSL block compiles to ONE IR (the serialized blob: 32B records +
 ; string pool). Two backends consume it:
-;   - the WASM module (emit.asm/mainwat.asm + asmx/wasm/*.wat) renders it
+;   - the WASM module (emit.asm/mainwat.asm + asx/wasm/*.wat) renders it
 ;     in the browser;
 ;   - THIS module renders it as static HTML at build time (the <label>_shell
 ;     the server sends). Same records, same inline CSS -> the browser can
 ;     HYDRATE the SSR DOM instead of rebuilding it.
 ;
-; Every widget gets a stable data-asmx-id (its record index, deterministic
-; pre-order). The shell carries data-asmx-root + data-asmx-checksum (FNV-1a
+; Every widget gets a stable data-asx-id (its record index, deterministic
+; pre-order). The shell carries data-asx-root + data-asx-checksum (FNV-1a
 ; over the canonical IR: records with the text_ptr field skipped + strings
 ; in record order). The glue recomputes the same hash in the module
 ; (widgets.wat ssr_checksum) and compares: mismatch = divergence between the
@@ -181,7 +181,7 @@ ssr_open_node:
     cmp eax, 2
     je .canvas
     ; ---- view (div) ----
-    lea rdi, [s_ssr_id1]       ; '<div data-asmx-id="'
+    lea rdi, [s_ssr_id1]       ; '<div data-asx-id="'
     call out_str
     mov rdi, r12
     call ssr_dec
@@ -204,7 +204,7 @@ ssr_open_node:
     jmp .done
 .label:
     ; ---- label (span) ----
-    lea rdi, [s_ssr_span1]     ; '<span data-asmx-id="'
+    lea rdi, [s_ssr_span1]     ; '<span data-asx-id="'
     call out_str
     mov rdi, r12
     call ssr_dec
@@ -235,7 +235,7 @@ ssr_open_node:
     jmp .done
 .canvas:
     ; ---- canvas ----
-    lea rdi, [s_ssr_cv1]       ; '<canvas data-asmx-id="'
+    lea rdi, [s_ssr_cv1]       ; '<canvas data-asx-id="'
     call out_str
     mov rdi, r12
     call ssr_dec

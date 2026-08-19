@@ -1,4 +1,4 @@
-;; asmx/wasm/draw.wat - pixel primitives (framework domain, like http/json).
+;; asx/wasm/draw.wat - pixel primitives (framework domain, like http/json).
 ;; Fragment: concatenated by the app Makefile inside one (module ...);
 ;; every src/ui/*.wat gets these, like %include in NASM.
 ;; available: $put_pixel, $blend_pixel, $clear, $fill_rect, $draw_line,

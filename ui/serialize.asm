@@ -58,8 +58,8 @@ visit:
     ret
 
 ; ----------------------------------------------------------------------
-; serialize - builds the ASMXUIV1 blob in blob_buf:
-;   +0 "ASMXUIV1" | +8 count | +12/16/20 theme bg/text/accent
+; serialize - builds the ASXUIV1 blob in blob_buf:
+;   +0 "ASXUIV1" | +8 count | +12/16/20 theme bg/text/accent
 ;   +24 records 32B | ... string pool (text_offset relativo ao blob)
 ; ----------------------------------------------------------------------
 serialize:
@@ -68,7 +68,7 @@ serialize:
     push r13
     push r14
     push r15
-    mov dword [blob_buf], 0x584D5341       ; "ASMX"
+    mov dword [blob_buf], 0x584D5341       ; "ASX"
     mov dword [blob_buf + 4], 0x31564955   ; "UIV1"
     mov eax, [rec_count]
     mov [blob_buf + 8], eax
@@ -262,4 +262,4 @@ serialize:
 
 ; ----------------------------------------------------------------------
 ; emit_shell - <label>_shell: db '<div id="ui" data-modules="/<ui_name>.wasm"></div>', 10
-    ;           db '<script type="module" src="/_asmx/glue.js"></script>', 0
+    ;           db '<script type="module" src="/_asx/glue.js"></script>', 0

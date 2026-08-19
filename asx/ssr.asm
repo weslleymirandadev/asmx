@@ -1,4 +1,4 @@
-; src/asmx/ssr.asm
+; src/asx/ssr.asm
 ; Server-side rendering helper: copies an HTML template to a buffer and
 ; replaces the "@client@" placeholder with <script src="PATH"></script>
 ; tags for every asset registered via the `client` macro (client linker

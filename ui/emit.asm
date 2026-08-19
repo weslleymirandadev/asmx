@@ -13,13 +13,13 @@ emit_shell:
     call out_label
     mov al, 39
     call out_byte
-    ; <div id="ui" data-asmx-root="<ui_name>"
+    ; <div id="ui" data-asx-root="<ui_name>"
     lea rdi, [s_ssr_div1]
     call out_str
     lea rdi, [ui_name_buf]
     mov rsi, [ui_name_len]
     call out_bytes
-    ; " data-asmx-checksum="<fnv1a over the canonical IR>"
+    ; " data-asx-checksum="<fnv1a over the canonical IR>"
     lea rdi, [s_ssr_ck1]
     call out_str
     call ssr_hash
@@ -52,7 +52,7 @@ emit_shell:
     call out_str
     ; close the line and open the next one: ' + ', 10 + newline + db '
     call ssr_nl
-    ; --- SSR widget tree (stable data-asmx-id + inline CSS) ---
+    ; --- SSR widget tree (stable data-asx-id + inline CSS) ---
     call ssr_emit_children
     ; --- close the root #ui ---
     lea rdi, [s_ssr_close]

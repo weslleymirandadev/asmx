@@ -1,5 +1,5 @@
-; src/asmx/helpers.asm
-; Internal helpers for asmx - string/memory copy with position advance
+; src/asx/helpers.asm
+; Internal helpers for asx - string/memory copy with position advance
 ; Used by send.asm to build response headers in resp_buf
 
 %include "common/syscalls.inc"

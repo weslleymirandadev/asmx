@@ -1,5 +1,5 @@
-;; asmx/wasm/components.wat - composable components on the primitives
-;; (the <View>/<Text>/<Button> of asmx). Apps compose these instead of
+;; asx/wasm/components.wat - composable components on the primitives
+;; (the <View>/<Text>/<Button> of asx). Apps compose these instead of
 ;; raw $view/$text. NOTE: widgets are positioned ABSOLUTE in the #ui
 ;; container - children use parent.x+off / parent.y+off coords.
 

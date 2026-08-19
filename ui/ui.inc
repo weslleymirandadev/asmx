@@ -1,6 +1,6 @@
 ; ui.inc - final include of the @ DSL compiler (module order)
 ; NASM assembles everything as one unit: .data/.bss/.text sections accumulate.
-; (ui/-prefixed paths resolve via -I asmx)
+; (ui/-prefixed paths resolve via -I asx)
 %include "ui/const.inc"
 %include "ui/literals.inc"
 %include "ui/tables.inc"

@@ -140,7 +140,7 @@ emit_handle_event:
     inc r12
     jmp .find_btn
 .have_btn:
-    ; The glue resolves the click target via data-asmx-role="button"
+    ; The glue resolves the click target via data-asx-role="button"
     ; (ev.target.closest, set by the SSR pass or by the glue in CSR) and
     ; only calls handle_event(1, ...) for clicks on a real button, with
     ; coords relative to it. So the wasm hit test accepts anything:

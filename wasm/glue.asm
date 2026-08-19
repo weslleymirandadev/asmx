@@ -1,14 +1,14 @@
-; asmx/wasm/glue.asm - the WASM UI renderer (framework side).
-; Serves the generic glue JS at /_asmx/glue.js (a virtual file - no
+; asx/wasm/glue.asm - the WASM UI renderer (framework side).
+; Serves the generic glue JS at /_asx/glue.js (a virtual file - no
 ; public/ entry needed). The glue loads /app.wasm, applies the module
 ; theme (ui_theme_*), renders the widget tree to DOM (View -> div,
 ; Text -> span, canvas widget -> <canvas>) and forwards mouse/keyboard
 ; events to handle_event(). Apps never write UI code in page.s - the
-; page template is just <div id="ui"> + <script src="/_asmx/glue.js">.
+; page template is just <div id="ui"> + <script src="/_asx/glue.js">.
 ;
-; SSR + hydration: when the served HTML carries data-asmx-root (the
+; SSR + hydration: when the served HTML carries data-asx-root (the
 ; ui-compile SSR pass renders the FULL widget tree server-side, with
-; stable data-asmx-id + data-asmx-checksum + a state snapshot), the glue
+; stable data-asx-id + data-asx-checksum + a state snapshot), the glue
 ; HYDRATES that DOM instead of rebuilding it: it maps the SSR nodes by
 ; id, validates types, restores the snapshot state (set_count) and only
 ; touches nodes that diverge. Phase machine: SSR -> HYDRATING ->
@@ -36,15 +36,15 @@ section .data
  db '  const mem = () => e.memory.buffer;', 10
  db '  const dec = new TextDecoder();', 10
  db '  // ---- SSR + hydration (phase machine: SSR -> HYDRATING -> INTERACTIVE) ----', 10
- db '  // SSR: the DOM came from the server (data-asmx-root on #ui). The glue', 10
+ db '  // SSR: the DOM came from the server (data-asx-root on #ui). The glue', 10
  db '  // assumes that DOM, validates it and connects behavior - it does NOT', 10
  db '  // rebuild the page. HYDRATING: first sync reusing the SSR nodes.', 10
  db '  // INTERACTIVE: normal reactive rendering may start.', 10
- db '  let phase = ui.hasAttribute("data-asmx-root") ? "SSR" : "CSR";', 10
+ db '  let phase = ui.hasAttribute("data-asx-root") ? "SSR" : "CSR";', 10
  db '  // hydration snapshot: minimal render state produced by the SSR pass', 10
- db '  // (<script type="application/asmx-state">). Restored BEFORE the first', 10
+ db '  // (<script type="application/asx-state">). Restored BEFORE the first', 10
  db '  // render so the first paint is exactly what the server produced.', 10
- db '  const snap = (() => { let s = null; for (const sc of document.scripts) { if (sc.type === "application/asmx-state") { s = sc; break; } } try { return s ? JSON.parse(s.textContent) : {}; } catch (err) { return {}; } })();', 10
+ db '  const snap = (() => { let s = null; for (const sc of document.scripts) { if (sc.type === "application/asx-state") { s = sc; break; } } try { return s ? JSON.parse(s.textContent) : {}; } catch (err) { return {}; } })();', 10
  db '  if (e.set_count && typeof snap.count === "number") e.set_count(snap.count);', 10
  db '  // dynamic route slug: "/profile/joao" -> "joao" (last path', 10
  db '  // segment). Written into the wasm memory (slug_area) so the', 10
@@ -52,23 +52,23 @@ section .data
  db '  const slug = location.pathname.split("/").filter(Boolean).pop() || "";', 10
  db '  if (e.slug_area) { const sa = e.slug_area(); const b = new TextEncoder().encode(slug); new Uint8Array(mem()).set(b, sa); new Uint8Array(mem())[sa + b.length] = 0; }', 10
  db '  const hex = (v) => "#" + ((v>>16)&255).toString(16).padStart(2,"0") + ((v>>8)&255).toString(16).padStart(2,"0") + (v&255).toString(16).padStart(2,"0");', 10
- db '  // the SSR shell already carries the base css (style[data-asmx-base]', 10
+ db '  // the SSR shell already carries the base css (style[data-asx-base]', 10
  db '  // with reset + theme) so the first paint is the final layout -', 10
  db '  // only inject our copy when rendering client-side (no SSR shell)', 10
- db '  if (!document.querySelector("style[data-asmx-base]")) {', 10
+ db '  if (!document.querySelector("style[data-asx-base]")) {', 10
  db '    const st = document.createElement("style");', 10
- db '    st.setAttribute("data-asmx-base", "");', 10
+ db '    st.setAttribute("data-asx-base", "");', 10
  db '    st.textContent = "*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;font-family:ui-sans-serif,system-ui,sans-serif;padding:48px 24px}";', 10
  db '    document.head.appendChild(st);', 10
  db '  }', 10
  db '  if (e.ui_theme_bg) document.body.style.background = hex(e.ui_theme_bg());', 10
  db '  if (e.ui_theme_text) document.body.style.color = hex(e.ui_theme_text());', 10
  db '  const els = [];', 10
- db '  // map the SSR DOM by data-asmx-id (stable compiler-generated ids).', 10
+ db '  // map the SSR DOM by data-asx-id (stable compiler-generated ids).', 10
  db '  // hydration REUSES these nodes - no structural DOM change unless a', 10
  db '  // node is missing or its tag type diverges (partial re-render).', 10
  db '  const byId = new Map();', 10
- db '  for (const el of ui.querySelectorAll("[data-asmx-id]")) byId.set(el.getAttribute("data-asmx-id"), el);', 10
+ db '  for (const el of ui.querySelectorAll("[data-asx-id]")) byId.set(el.getAttribute("data-asx-id"), el);', 10
  db '  const tagFor = (type) => type === 1 ? "SPAN" : type === 2 ? "CANVAS" : "DIV";', 10
  db '  // flexbox layout: views are flex containers, texts flow', 10
  db '  // inside them. x/y from the module are the fallback size.', 10
@@ -86,7 +86,7 @@ section .data
  db '      if (!el) el = byId.get(String(i)) || null;', 10
  db '      const want = tagFor(type);', 10
  db '      if (!el || el.tagName !== want) {', 10
- db '        if (el) console.error("ASMX Hydration Error: node " + i + " structural mismatch expected <" + want.toLowerCase() + "> got <" + el.tagName.toLowerCase() + "> (re-created, subtree client-rendered)");', 10
+ db '        if (el) console.error("ASX Hydration Error: node " + i + " structural mismatch expected <" + want.toLowerCase() + "> got <" + el.tagName.toLowerCase() + "> (re-created, subtree client-rendered)");', 10
  db '        el = document.createElement(want.toLowerCase());', 10
  db '        byId.set(String(i), el);', 10
  db '      }', 10
@@ -133,7 +133,7 @@ section .data
  db '        let txt = dec.decode(new Uint8Array(buf, tp, end-tp));', 10
  db '        if (txt.includes("{slug}")) txt = txt.split("{slug}").join(slug);', 10
  db '        if (el.textContent !== txt) {', 10
- db '          if (phase === "HYDRATING" && !el.textContent.includes("{slug}")) console.error("ASMX Hydration Error: node " + i + " text mismatch server=" + JSON.stringify(el.textContent) + " client=" + JSON.stringify(txt) + " (fixed)");', 10
+ db '          if (phase === "HYDRATING" && !el.textContent.includes("{slug}")) console.error("ASX Hydration Error: node " + i + " text mismatch server=" + JSON.stringify(el.textContent) + " client=" + JSON.stringify(txt) + " (fixed)");', 10
  db '          el.textContent = txt;', 10
  db '        }', 10
  db '      } else if (type === 2) {', 10
@@ -147,10 +147,10 @@ section .data
  db '        if (el.style.cssText !== css) el.style.cssText = css;', 10
  db '        if (hh) { if (el.style.minHeight !== hh + "px") el.style.minHeight = hh + "px"; }', 10
  db '      }', 10
- db '      // buttons carry data-asmx-role="button" (SSR emits it; CSR sets', 10
+ db '      // buttons carry data-asx-role="button" (SSR emits it; CSR sets', 10
  db '      // it here) so the click handler can resolve the target with', 10
  db '      // ev.target.closest instead of scanning every widget rect', 10
- db '      if (role === 1) el.setAttribute("data-asmx-role", "button");', 10
+ db '      if (role === 1) el.setAttribute("data-asx-role", "button");', 10
  db '      const pe = (parent >= 0 && els[parent]) ? els[parent] : ui;', 10
  db '      if (el.parentNode !== pe) pe.appendChild(el);', 10
  db '    }', 10
@@ -161,16 +161,16 @@ section .data
             db '  if (e.init) e.init();', 10
             db '  if (e.render) e.render();', 10
             db '  if (phase === "SSR") phase = "HYDRATING";', 10
-            db '  // checksum: the server embeds data-asmx-checksum = FNV-1a over the', 10
+            db '  // checksum: the server embeds data-asx-checksum = FNV-1a over the', 10
             db '  // canonical IR (records + strings). The module recomputes the same', 10
             db '  // hash (ssr_checksum) over the records it produced (AFTER render', 10
             db '  // populated the widget array). mismatch = the SSR DOM and this', 10
             db '  // module disagree -> diagnostic; syncDOM repairs the diverging', 10
             db '  // nodes one by one (partial recovery).', 10
-            db '  if (phase === "HYDRATING" && e.ssr_checksum && ui.dataset.asmxChecksum) {', 10
-            db '    const want = parseInt(ui.dataset.asmxChecksum, 16);', 10
+            db '  if (phase === "HYDRATING" && e.ssr_checksum && ui.dataset.asxChecksum) {', 10
+            db '    const want = parseInt(ui.dataset.asxChecksum, 16);', 10
             db '    const got = e.ssr_checksum() >>> 0;', 10
-            db '    if (got !== want) console.error("ASMX Hydration Error: root=" + (ui.dataset.asmxRoot || "?") + " server checksum=" + ui.dataset.asmxChecksum + " client checksum=" + got.toString(16));', 10
+            db '    if (got !== want) console.error("ASX Hydration Error: root=" + (ui.dataset.asxRoot || "?") + " server checksum=" + ui.dataset.asxChecksum + " client checksum=" + got.toString(16));', 10
             db '  }', 10
             db '  syncDOM();', 10
             db '  phase = "INTERACTIVE";', 10
@@ -192,13 +192,13 @@ section .data
             db '  if (e.handle_event) {', 10
             db '    const rp = () => ui.getBoundingClientRect();', 10
             db '    // the browser resolves the click target: only a real', 10
-            db '    // button (data-asmx-role="button") gets a click dispatch,', 10
+            db '    // button (data-asx-role="button") gets a click dispatch,', 10
             db '    // with coordinates relative to it - no rect scanning', 10
             db '    // over every widget. clicks outside any button are', 10
             db '    // dropped (the wasm handler only acts on t==1 clicks)', 10
             db '    const fire = (t, ev) => {', 10
             db '      if (t === 1) {', 10
-            db '        const btn = ev.target.closest ? ev.target.closest("[data-asmx-role=button]") : null;', 10
+            db '        const btn = ev.target.closest ? ev.target.closest("[data-asx-role=button]") : null;', 10
             db '        if (!btn) return;', 10
             db '        const rc = btn.getBoundingClientRect();', 10
             db '        e.handle_event(1, ev.clientX - rc.left, ev.clientY - rc.top, 0);', 10
@@ -231,7 +231,7 @@ section .data
             db '      }', 10
             db '    } catch (err) {}', 10
             db '  };', 10
-            db '  new EventSource("/_asmx/events").onopen = () => check();', 10
+            db '  new EventSource("/_asx/events").onopen = () => check();', 10
             db '};', 10
             db 'boot();', 0
     glue_js_len equ $ - glue_js - 1

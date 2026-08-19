@@ -2,7 +2,7 @@
 ; const.inc - constants and node struct (included via ui.inc)
 ; =============================================================================
 
-; asmx/ui/compile.asm - the @ DSL compiler (UI in page.s), pure asm.
+; asx/ui/compile.asm - the @ DSL compiler (UI in page.s), pure asm.
 ; Pre-processes a page.s: finds @ DSL blocks inside section .data and
 ; replaces each block with:
 ;   1) the HTML shell <label>_shell (data-modules="/<ui_name>[/page].wasm")

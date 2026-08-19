@@ -1,9 +1,9 @@
 ; src/json/json.inc
-; JSON domain interface - parser + stringifier for the asmx framework.
+; JSON domain interface - parser + stringifier for the asx framework.
 ; Pure interface: only includes, constants and docs. NO symbols declared
 ; (each .asm declares the externs it uses - see common.inc pattern).
 ;
-; Include from app code with:  %include "json/json.inc"   (-I asmx)
+; Include from app code with:  %include "json/json.inc"   (-I asx)
 
 %ifndef JSON_INC
 %define JSON_INC

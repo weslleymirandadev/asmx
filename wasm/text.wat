@@ -1,4 +1,4 @@
-;; asmx/wasm/text.wat - bitmap 5x7 text (framework domain).
+;; asx/wasm/text.wat - bitmap 5x7 text (framework domain).
 ;; $draw_text(x, y, str, r, g, b) + font at $font_base (147456 = right
 ;; after a 192x192 RGBA buffer; chars 0x20..0x7F, 5 bytes per char, one
 ;; column per byte, bit 0 (LSB) = top row).
