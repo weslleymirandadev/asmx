@@ -209,3 +209,59 @@ asmx_send_status:
     pop r12
     pop rbx
     ret
+
+; asmx_send_redirect(rdi = location) - respond 302 Found with a Location
+; header and an empty body. Used by the middleware (mw.redirect).
+global asmx_send_redirect
+asmx_send_redirect:
+    push rbx
+    push r12
+    push r15
+    mov r12, rdi              ; location (callee-saved)
+
+    ; Build header: 302 status line + Location + "Content-Length: 0\r\n\r\n"
+    mov qword [resp_status], 302
+    lea r15, [resp_buf]
+    call write_status_line
+
+    mov rdi, r15
+    lea rsi, [loc_header]
+    call strcpy_adv
+    mov r15, rax
+
+    mov rdi, r15
+    mov rsi, r12
+    call strcpy_adv           ; the location value
+    mov r15, rax
+
+    ; CRLF after the Location line
+    mov rdi, r15
+    lea rsi, [loc_crlf]
+    mov rdx, 2
+    call memcpy_adv
+    mov r15, rax
+
+    mov rdi, r15
+    lea rsi, [cl_zero]
+    call strcpy_adv
+    mov r15, rax
+
+    ; header length = write pos - resp_buf
+    lea rax, [resp_buf]
+    sub r15, rax
+
+    ; write
+    mov rax, SYS_write
+    mov rdi, [client_fd]
+    lea rsi, [resp_buf]
+    mov rdx, r15
+    syscall
+
+    pop r15
+    pop r12
+    pop rbx
+    ret
+
+section .data
+    loc_header db "Location: ", 0
+    loc_crlf   db 13, 10
