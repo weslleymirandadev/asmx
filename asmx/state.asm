@@ -29,12 +29,14 @@ global cc_nocache
     ; Status code -> reason table (dq code, dq reason_ptr = 16 bytes/entry)
     status_table:
         dq 200, st_200
+        dq 302, st_302
         dq 400, st_400
         dq 404, st_404
         dq 405, st_405
         dq 500, st_500
     status_count equ ($ - status_table) / 16
     st_200 db " OK", 13, 10, 0
+    st_302 db " Found", 13, 10, 0
     st_400 db " Bad Request", 13, 10, 0
     st_404 db " Not Found", 13, 10, 0
     st_405 db " Method Not Allowed", 13, 10, 0
