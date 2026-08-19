@@ -41,6 +41,7 @@ msg_comp_depth_len equ $ - msg_comp_depth
 msg_comp_args  db "ui-compile: invalid @@ component arguments", 10
 msg_comp_args_len equ $ - msg_comp_args
 s_components   db "src/components/", 0
+s_children     db "children", 0
 
 ; --- literais do output (shell no page.s + WAT) ---
 s_sh1         db "_shell: db ", 0
