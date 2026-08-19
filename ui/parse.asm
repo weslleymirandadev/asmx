@@ -613,6 +613,9 @@ compile_block:
 .theme_done:
     call build_records
     call serialize
+    ; style records must exist before emit_shell (the SSR HTML reads
+    ; role/padding/etc. from style_buf) AND before emit_wat_componente
+    call build_style_records
     pop r15
     pop r14
     pop r13
