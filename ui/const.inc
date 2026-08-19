@@ -37,7 +37,7 @@
 %define WAT_CAP      65536
 %define STR_BASE     148000
 
-%define NODE_SIZE    72
+%define NODE_SIZE    128
 %define MAX_NODES    64
 %define MAX_STACK    32
 %define MAX_RECORDS  128
@@ -51,10 +51,10 @@
 %define N_TAG        0               ; u8: 0=view 1=label 2=button
 %define N_TEXT_PTR   2               ; u32 offset into in_buf (0 = no text)
 %define N_TEXT_LEN   6               ; u32
-%define N_BG         10              ; u32 0xRRGGBB (0 = default)
-%define N_COLOR      14              ; u32
+%define N_BG         10              ; u32 0xRRGGBB (0xFFFFFFFF = none)
+%define N_COLOR      14              ; u32 (0xFFFFFFFF = none)
 %define N_FS         18              ; u32
-%define N_PAD        22              ; u32
+%define N_PAD        22              ; u32 (p-*)
 %define N_MT         26              ; u32
 %define N_MB         30              ; u32
 %define N_W          34              ; u32 (0 = auto)
@@ -66,6 +66,42 @@
 %define N_FIRST      58              ; i32
 %define N_LAST       62              ; i32
 %define N_NEXT       66              ; i32
+%define N_FLAGS      70              ; u32 style flags (see F_* below)
+%define N_GAP        74              ; u32 (gap-*)
+%define N_RADIUS     78              ; u32 (rounded-*)
+%define N_PX         82              ; u32 (px-*)
+%define N_PY         86              ; u32 (py-*)
+%define N_H          90              ; u32 explicit height (h-*)
+%define N_WEIGHT     94              ; u32 font weight (font-*)
+%define N_ALIGN      98              ; u32 0 left 1 center 2 right 3 justify
+%define N_BORDER     102             ; u32 border width px
+%define N_OPACITY    106             ; u32 0-100
+%define N_SHADOW     110             ; u32 0 none 1 sm 2 md 3 lg 4 xl
+%define N_BORDER_COLOR 114           ; u32 0xRRGGBB (0xFFFFFFFF = default)
+%define N_PT         118             ; u32 padding-top (pt-*)
+%define N_PB         122             ; u32 padding-bottom (pb-*)
+
+; style flags (N_FLAGS bits)
+%define F_FLEX       1
+%define F_FLEXCOL    2
+%define F_ITEMSC     4
+%define F_ITEMSE     8
+%define F_JUSTC      16
+%define F_JUSTB      32
+%define F_JUSTE      64
+%define F_HIDDEN     128
+%define F_WRAP       256
+%define F_GROW       512
+%define F_BOLD       1024
+%define F_CENTER     2048
+%define F_RIGHT      4096
+%define F_UPPER      8192
+%define F_ITALIC     16384
+%define F_UNDER      32768
 
 ; rec_order entry: 12 bytes (kind u32, node u32, parent_rec u32)
 ;   kind 0 = node record (tag), kind 1 = button view, kind 2 = button label
+; style record (16 bytes, emitted as a data segment + exported as styles()):
+;   +0 flags u16 | +2 weight u8 | +3 align u8 | +4 gap u8 | +5 radius u8
+;   +6 px u8 | +7 py u8 | +8 border u8 | +9 opacity u8 | +10 shadow u8
+;   +11 role u8 (0 normal, 1 button) | +12..15 pad
