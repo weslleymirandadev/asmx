@@ -25,7 +25,7 @@ extern accept_error
 extern read_error
 extern server_fd, client_fd, asmx_handler
 extern buffer, route, resp_status
-extern log_banner, log_bind_retry, log_request, clock_start
+extern log_banner, log_bind_retry, log_bind_giveup, log_request, clock_start
 
 section .bss
     sig_action resq 4     ; struct sigaction: sa_handler, sa_flags, sa_restorer, sa_mask
@@ -36,6 +36,15 @@ section .data
                               ; <10ms after connect; 300ms just kills
                               ; stale/preconnect sockets fast so the
                               ; next refresh waits at most ~0.3s
+
+; ----------------------------------------------------------------------
+; MAX_PORT - ceiling for the "port already in use" retry. The retry
+; escalates port+1 up to this value, then gives up with a clear error
+; (no runaway loop that burns every port).
+; TEMPORARY: 4000 while the bind retry is being debugged - bump to
+; 65535 (the last available port) once it works reliably.
+; ----------------------------------------------------------------------
+%define MAX_PORT 4000
 
 section .text
 
@@ -104,7 +113,15 @@ asmx_listen:
     mov rdi, r12
     call log_bind_retry
     inc r12
+    cmp r12, MAX_PORT         ; never escalate past the ceiling
+    jg .give_up
     jmp .listen_loop              ; rdi is re-set at the top of the loop
+.give_up:
+    mov rdi, MAX_PORT
+    call log_bind_giveup       ; colored "no free port up to N"
+    mov rax, SYS_exit
+    mov rdi, 1
+    syscall
 
 ; ----------------------------------------------------------------------
 ; requests - accept loop (exported so user handlers can `jmp requests`)
