@@ -37,14 +37,7 @@ section .data
                               ; stale/preconnect sockets fast so the
                               ; next refresh waits at most ~0.3s
 
-; ----------------------------------------------------------------------
-; MAX_PORT - ceiling for the "port already in use" retry. The retry
-; escalates port+1 up to this value, then gives up with a clear error
-; (no runaway loop that burns every port).
-; TEMPORARY: 4000 while the bind retry is being debugged - bump to
-; 65535 (the last available port) once it works reliably.
-; ----------------------------------------------------------------------
-%define MAX_PORT 4000
+%define MAX_PORT 65535
 
 section .text
 
