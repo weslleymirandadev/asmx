@@ -49,6 +49,8 @@ section .bss
     asmx_handler resq 1
     buffer       resb 4096
     route        resb 256
+    slug_buf     resb 256
+    slug_len     resq 1
     resp_buf     resb 512
     itoa_buf     resb 12
 
@@ -61,4 +63,4 @@ global cl_prefix, crlf2, conn_close
 global status_table, status_count
 global http_prefix, cl_zero
 global server_fd, client_fd, asmx_handler
-global buffer, route, resp_buf, itoa_buf
+global buffer, route, slug_buf, slug_len, resp_buf, itoa_buf
