@@ -101,7 +101,10 @@
     br $rec
   end
   end
-  ;; strings in record order (up to the null)
+  ;; strings in record order (up to the null). Interpolated strings
+  ;; (dyn flag in record byte 25) are SKIPPED: the value is runtime
+  ;; data (ssr.state may override it), not part of the canonical IR -
+  ;; the server-side ssr_hash skips them too (dyn_find).
   i32.const 0
   local.set $i
   block $str_end
@@ -110,6 +113,22 @@
     global.get $widget_count
     i32.ge_u
     br_if $str_end
+    ;; dyn flag? skip the string
+    global.get $widget_base
+    local.get $i
+    i32.const 32
+    i32.mul
+    i32.add
+    i32.const 25
+    i32.add
+    i32.load8_u
+    if
+      local.get $i
+      i32.const 1
+      i32.add
+      local.set $i
+      br $str
+    end
     global.get $widget_base
     local.get $i
     i32.const 32
