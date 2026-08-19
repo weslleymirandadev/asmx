@@ -253,7 +253,18 @@ s_ssr_sufi  db '.wasm">', 0
 s_ssr_sufp  db '/page.wasm">', 0
 s_ssr_close db '</div>', 0
 s_ssr_snap1 db '<script type="application/asx-state">{"root":"', 0
-s_ssr_snap2 db '"}</script>', 0
+; emits: ', 34, 4, '}</script> -> the page.s line becomes
+;   db '...{"root":"<ui>', 34, 4, '}</script>'
+; so the final bytes are: " 0x04 }</script> (the server injects the
+; ,"key":value pairs at the 0x04 injection point; the " (34) closes
+; the root value so the JSON stays valid)
+s_ssr_snap2 db "', 34, 4, '}</script>", 0
+; ssr.state substitution slots (bytes of control the server resolves):
+;   text slot: 0x01 <state name> 0x02 <default value> 0x03
+;   snapshot:  0x04 = injection point for the ,"key":value pairs
+s_ssr_slot1 db "', 1, '", 0
+s_ssr_slot2 db "', 2, '", 0
+s_ssr_slot3 db "', 3, '", 0
 ; global base css served WITH the SSR shell so the first paint already
 ; has the reset + theme (no layout flicker when the glue boots later);
 ; the glue skips injecting its own copy when this tag is present
@@ -323,6 +334,18 @@ s_esc_gt   db "&gt;", 0
 s_esc_quot db "&quot;", 0
 s_esc_apos db "&#39;", 0
 
-; --- state exports (mainwat.asm emit_handle_event) ---
+; state exports (mainwat.asm emit_handle_event)
 s_ev_cnt_get db '(func (export "get_count") (result i32) global.get $count)', 10, 0
 s_ev_cnt_set db '(func (export "set_count") (param i32) local.get 0 global.set $count)', 10, 0
+; ssr.state setters (mainwat.asm emit_state_setters): set_<name> writes
+; the snapshot value into state_data BEFORE the first render so the wasm
+; mounts the same text the server injected (set_count in the glue loop)
+s_set_h1 db '(func (export "set_', 0
+s_set_dot db '.', 0
+s_set_h2 db '") (param $v i32)', 10, '  global.get $state_base', 10, '  i32.const ', 0
+s_set_h3 db 10, '  i32.add', 10, '  local.get $v', 10, '  i32.store)', 10, 0
+; dyn flag in the wasm record (byte 25): 1 = interpolated text - the
+; ssr_checksum skips its string (the value is runtime data, ssr.state
+; may override it, so it must not be part of the canonical IR hash)
+s_dyn_f1 db 10, '  global.get $widget_base', 10, '  i32.const ', 0
+s_dyn_f2 db 10, '  i32.add', 10, '  i32.const 1', 10, '  i32.store8', 10, 0
