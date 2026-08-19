@@ -121,6 +121,17 @@ http_parse_request_line:
     test rdx, rdx
     jle .no_path_space
 
+    ; strip the query string: the path ends at the first '?'
+    ; (the glue.js hot-reload watcher polls with ?t=<timestamp>)
+    mov rdi, rbx
+    mov rcx, rdx
+    mov al, '?'
+    repne scasb
+    jne .no_query
+    lea rdx, [rdi - 1]
+    sub rdx, rbx
+.no_query:
+
     ; Copy path
     ; cap at 255 so null fits in http_req_path[256]
     cmp rdx, 255
