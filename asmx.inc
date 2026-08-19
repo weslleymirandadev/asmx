@@ -33,19 +33,19 @@
 ;   ; the shell:
 ;   ;
 ;   ;   section .data
-;   ;       sobre_content:
+;   ;       about_content:
 ;   ;           @main bg-black text-white min-h-screen p-8
 ;   ;               @h1 text-4xl font-bold
-;   ;                   "Sobre o ASMX"
+;   ;                   "About ASMX"
 ;   ;               @p text-gray-400
 ;   ;                   "Fullstack Assembly + WebAssembly"
 ;   ;           @end
 ;   ;
-;   ;   page get_sobre
+;   ;   page get_about
 ;   ;
 ;   ;   section .SERVER
-;   ;   get_sobre:
-;   ;       res.content sobre_content
+;   ;   get_about:
+;   ;       res.content about_content
 ;   ;       asmx.next
 ;
 ; NOTE: `requests` is a reserved symbol (the accept loop). Do NOT define
@@ -210,7 +210,7 @@ extern ct_ui, ct_ui_len
 ; The route PATH is NOT declared here - it derives from the file location
 ; at build time (Makefile passes -DROUTE_PATH="..."), exactly like Next.js:
 ;   src/app/page.s            -> "/"
-;   src/app/sobre/page.s      -> "/sobre"
+;   src/app/about/page.s      -> "/about"
 ;   src/app/api/hello/route.s -> "/api/hello"
 ;   src/app/not-found.s       -> "/__not_found" (reserved 404 route)
 ; Static files are NOT routes: anything in static/ is served automatically
