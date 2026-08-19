@@ -111,7 +111,7 @@ Pages run in `section .SERVER` and end with `asmx.next`:
 
 ```nasm
 ; src/app/page.s  ->  GET /
-%include "asmx.inc"
+; asmx.inc is pre-included by the Makefile
 
 section .data
     home_html db '<h1>hello from assembly</h1>', 0
@@ -126,11 +126,71 @@ get_home:
 
 A `page` route is GET-only — POST yields an automatic 405.
 
+### Middleware (`src/middleware.s`)
+
+Next.js `middleware.ts` style: a `src/middleware.s` file runs BEFORE routing,
+on every request. It can let the request through, redirect it, rewrite the
+path, or answer directly. It lives at the same level as `app/` and
+`components/`:
+
+```nasm
+; src/middleware.s - protect /admin/* with a session cookie
+; asmx.inc is pre-included by the Makefile
+
+middleware mw_auth
+
+section .MIDDLEWARE
+mw_auth:
+    ; only guard paths under /admin (config.matcher equivalent)
+    lea rdi, [route]
+    lea rsi, [admin_prefix]
+    mov rdx, 7              ; len("/admin/")
+    call strncmp
+    test rax, rax
+    jnz .pass               ; not /admin/* -> let everything through
+
+    req.cookie "session"    ; rax = value ptr, rdx = len, 0 if absent
+    test rax, rax
+    jz .deny
+
+.pass:
+    mw.next                 ; continue routing (the page/API runs)
+
+.deny:
+    mw.redirect "/login"    ; 302 + Location, stop
+
+section .data
+    admin_prefix db "/admin/", 0
+```
+
+The handler must end with ONE of:
+
+| macro                  | effect                                          |
+|------------------------|-------------------------------------------------|
+| `mw.next`              | continue routing (the matched page/API runs)    |
+| `mw.redirect "path"`   | 302 Found + `Location: path`, stop              |
+| `mw.rewrite "path"`    | rewrite `req.path` to `path`, continue routing  |
+| `mw.status code`       | respond with a status code, empty body, stop    |
+| `mw.json/text/html ptr`| respond directly, stop                          |
+
+Request access inside the middleware (also usable in any handler):
+
+| macro               | result                                          |
+|---------------------|-------------------------------------------------|
+| `req.header "Name"` | header value: `rax` = ptr, `rdx` = len, 0 absent (case-insensitive name) |
+| `req.cookie "name"` | cookie value: `rax` = ptr, `rdx` = len, 0 absent (exact name, up to `;`) |
+| `req.path`          | current path (the `route` buffer)               |
+
+Register with `middleware mw_auth` (one entry per project); without the
+file, routing is unchanged. A single middleware handler is called for every
+request, so the matcher check is up to you (as in Next.js `config.matcher`).
+
+
 ### Minimal API
 
 ```nasm
 ; src/app/api/hello/route.s  ->  /api/hello
-%include "asmx.inc"
+; asmx.inc is pre-included by the Makefile
 
 section .data
     hello db '{"hello": "world"}', 0
@@ -147,7 +207,7 @@ get_hello:
 
 ```nasm
 ; src/app/api/user/route.s  ->  /api/user
-%include "asmx.inc"
+; asmx.inc is pre-included by the Makefile
 
 section .data
     ok db '{"ok": true}', 0
@@ -195,7 +255,7 @@ a WASM module that renders it in the browser.
 
 ```nasm
 ; src/app/sobre/page.s  ->  GET /sobre
-%include "asmx.inc"
+; asmx.inc is pre-included by the Makefile
 
 section .data
     sobre_content:
@@ -306,7 +366,7 @@ etc.
 
 ```nasm
 ; src/app/profile/[id]/page.s  ->  GET /profile/<slug>
-%include "asmx.inc"
+; asmx.inc is pre-included by the Makefile
 
 section .data
     profile_content:
@@ -392,7 +452,13 @@ updates without a manual refresh.
 
 ## Public API
 
-Include `%include "asmx.inc"` in every route file.
+**No `%include` needed.** The Makefile pre-includes `asmx.inc` into every
+`src/` file via NASM `-P` (see Makefile below) — just write your handlers.
+A manual `%include "asmx.inc"` in a src file is harmless (the file has an
+`%ifndef` guard).
+
+Include `%include "asmx.inc"` in every route file if you assemble outside
+the Makefile.
 
 ### Response (`res.`)
 
@@ -469,7 +535,7 @@ without quotes.
 
 ```nasm
 ; src/app/api/login/route.s
-%include "asmx.inc"
+; asmx.inc is pre-included by the Makefile
 
 section .data
     bad db '{"error": "invalid json"}', 0
@@ -542,7 +608,7 @@ garbage rejected.
 
 ```nasm
 ; src/app/api/echo/route.s
-%include "asmx.inc"
+; asmx.inc is pre-included by the Makefile
 
 route.post post_echo
 
@@ -579,7 +645,7 @@ custom 404.
 
 ```nasm
 ; src/app/not-found.s
-%include "asmx.inc"
+; asmx.inc is pre-included by the Makefile
 
 section .data
     nf db '<h1>404</h1><p>nothing here</p>', 0
@@ -602,6 +668,15 @@ which is the @ DSL compiler build tool (never linked into the server).
 - `make` — build `build/server` + all `static/**/page.wasm` modules
 - `make run` — build and run
 - `make clean` — remove build artifacts
+
+### Automatic `asmx.inc` pre-include
+
+App files (`src/`) are assembled with NASM `-P asmx/asmx.inc`, so you never
+write `%include "asmx.inc"` by hand. The framework (`asmx/**`) and the
+ui-compile tool are NOT pre-included: they declare their own externs and a
+pre-include would conflict (extern vs global on the same symbol). A manual
+`%include` in a src file still works (the `%ifndef` guard in asmx.inc makes
+it idempotent).
 
 ### Dynamic-route build details
 
