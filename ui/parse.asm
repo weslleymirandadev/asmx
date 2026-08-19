@@ -334,6 +334,8 @@ compile_block:
     je .tk_done
     cmp al, 9
     je .tk_done
+    cmp al, ':'                ; inline text separator (@p: "...")
+    je .tk_done
     inc r9
     jmp .tk_scan
 .tk_done:
@@ -452,12 +454,109 @@ compile_block:
     mov [rcx], eax
     mov [rcx + 4], ebx
     inc qword [stack_top]
-    ; classes: tokens de r9 (pos-token) ate r14
+    ; classes: tokens de r9 (pos-token) ate r14, mas para no ':' (inline text)
     imul rcx, rbx, NODE_SIZE
     lea rdi, [nodes + rcx]
     mov rsi, r9
     mov rdx, r14
+    ; find a ':' in [r9, r14) - the inline text separator
+    mov r8, r9
+.cls_scan:
+    cmp r8, r14
+    jge .cls_done
+    cmp byte [in_buf + r8], ':'
+    je .cls_colon
+    inc r8
+    jmp .cls_scan
+.cls_colon:
+    mov rdx, r8                 ; classes end at the colon
+.cls_done:
+    push r14                    ; parse_classes clobbers r14 (line end)
+    push rdx                    ; ... and rdx (the colon offset)
     call parse_classes
+    pop rdx
+    pop r14
+    ; inline text after ':'?  ": \"content\"" -> the node's text
+    cmp rdx, r14
+    jge .no_inline
+    lea r8, [rdx + 1]           ; skip ':'
+.inl_skip:
+    cmp r8, r14
+    jge .no_inline
+    mov al, [in_buf + r8]
+    cmp al, ' '
+    je .inl_si
+    cmp al, 9
+    jne .inl_q
+.inl_si:
+    inc r8
+    jmp .inl_skip
+.inl_q:
+    cmp byte [in_buf + r8], '"'
+    jne .no_inline
+    lea r9, [r8 + 1]            ; text start
+    mov r10, r9
+.inl_scan:
+    cmp r10, r14
+    jge .no_inline
+    cmp byte [in_buf + r10], '"'
+    je .inl_found
+    inc r10
+    jmp .inl_scan
+.inl_found:
+    ; the node (rbx) gets the text if it is a label/button; a view gets
+    ; an implicit label child
+    imul rcx, rbx, NODE_SIZE
+    lea rcx, [nodes + rcx]
+    movzx eax, byte [rcx + N_TAG]
+    cmp eax, 1
+    je .inl_ok
+    cmp eax, 2
+    je .inl_ok
+    ; view: create a label child (tag 1) under it
+    mov eax, [node_count]
+    cmp eax, MAX_NODES
+    jge .err_nodes
+    mov r15d, eax               ; new child idx
+    imul rdx, rax, NODE_SIZE
+    lea rdi, [nodes + rdx]
+    mov ecx, NODE_SIZE
+    xor eax, eax
+    rep stosb
+    mov eax, r15d               ; recompute (rep stosb clobbered rax/rcx/rdi)
+    imul rdx, rax, NODE_SIZE
+    lea rdi, [nodes + rdx]
+    mov byte [rdi + N_TAG], 1
+    mov dword [rdi + N_FS], 13
+    mov dword [rdi + N_PARENT], ebx
+    mov dword [rdi + N_FIRST], -1
+    mov dword [rdi + N_LAST], -1
+    mov dword [rdi + N_NEXT], -1
+    mov dword [rdi + N_BG], -1
+    mov dword [rdi + N_COLOR], -1
+    mov [rdi + N_TEXT_PTR], r9d
+    mov eax, r10d
+    sub eax, r9d               ; r9 is past the quote already - no -1
+    mov [rdi + N_TEXT_LEN], eax
+    ; parent first/last point at the new child
+    imul r8, rbx, NODE_SIZE
+    lea r8, [nodes + r8]
+    cmp dword [r8 + N_FIRST], -1
+    jne .v_has_first
+    mov [r8 + N_FIRST], r15d
+    jmp .v_last
+.v_has_first:
+    mov [r8 + N_LAST], r15d
+.v_last:
+    mov [r8 + N_LAST], r15d
+    inc qword [node_count]
+    jmp .no_inline
+.inl_ok:
+    mov [rcx + N_TEXT_PTR], r9d
+    mov eax, r10d
+    sub eax, r9d               ; r9 is past the quote already - no -1
+    mov [rcx + N_TEXT_LEN], eax
+.no_inline:
     jmp .next_line
 .next_line:
     mov r12, r14
