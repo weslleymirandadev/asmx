@@ -260,11 +260,11 @@ a WASM module that renders it in the browser.
 section .data
     about_content:
         @main bg-black text-white min-h-screen p-8:
-            @h1 text-4xl: "About o ASX"
+            @h1 text-4xl: "About ASX"
             @p text-blue-500: "Fullstack Assembly + WebAssembly"
 
             @div bg-white w-10:
-                @h2 text-black font-bold: "Oi"
+                @h2 text-black font-bold: "Hi"
 
             @@card color="#f00" title="Blog":
                 "Today's blog is about..."
@@ -280,7 +280,7 @@ get_about:
 
 - **Tags**: `@main @div @section @nav @header @footer @h1 @h2 @h3 @p @span
   @a @button`. Text-bearing tags (`h1 h2 h3 p span a button`) take inline
-  text after a colon: `@h1 text-4xl: "Texto"`.
+  text after a colon: `@h1 text-4xl: "Text"`.
 - **Classes**: `bg-<color> text-<color> text-<size> font-bold p-* m-* mt-*
   mb-* w-* min-h-screen` — full Tailwind v3 palette (slate→rose, 50–950,
   black/white) and spacing scale (0→96, px, fractions, screen).
@@ -307,18 +307,18 @@ section .data
         @main p-8
             state count: int = 0
             @h1 text-5xl font-bold text-orange-500:
-                "OLHA O MACACO"
+                "LOOK AT THE MONKEY"
             @p text-gray-400 mt-4:
-                "assembly no servidor - wasm no browser"
+                "assembly on the server - wasm in the browser"
             @div mt-8 p-6:
                 @p text-2xl:
                     "count: {count}"
                 @button bg-orange-500 mt-6 p-3 onclick="count++":
-                    "CLIQUE AQUI"
+                    "CLICK HERE"
                 @button bg-orange-500 mt-2 p-3 onclick="count = 0":
-                    "ZERAR"
+                    "RESET"
             @p text-gray-400 mt-8:
-                "aperte ESPACO ou clique no botao"
+                "press SPACE or click the button"
         @end
 ```
 
@@ -345,28 +345,28 @@ They take `{param}` placeholders and a special `{children}` slot.
 
 ```nasm
 ; src/components/badge.s
-; Usage: @@badge cor="green-500": "texto"
+; Usage: @@badge color="green-500": "text"
 badge:
-    @div bg-{cor} p-2
+    @div bg-{color} p-2
         {children}
     @end
 ```
 
 ```nasm
 ; src/components/card.s
-; Usage: @@card cor="blue-500" titulo="...": "children aqui"
+; Usage: @@card color="blue-500" title="...": "children here"
 card:
-    @div bg-{cor} p-6
+    @div bg-{color} p-6
         @h1 text-white text-2xl
-            "{titulo}"
+            "{title}"
         {children}
-        @@badge cor="green-500": "componente aninhado"
+        @@badge color="green-500": "nested component"
     @end
 ```
 
-- Parameters are substituted into class names and text (`bg-{cor}`).
+- Parameters are substituted into class names and text (`bg-{color}`).
 - `{children}` is replaced by whatever the caller passes — inline after the
-  `:` (`@@card ...: "texto"`) or as a following line.
+  `:` (`@@card ...: "text"`) or as a following line.
 - Components nest recursively (up to depth 16) and any change to a component
   rebuilds every page (`COMP_SRCS` in the Makefile).
 - The page block also gets an implicit label: `@@card` in `about_content`
@@ -422,10 +422,10 @@ section .data
     profile_content:
         @main p-8:
             @h1 text-4xl font-bold text-orange-500:
-                "Perfil"
+                "Profile"
             @div mt-8:
-                @@card cor="#1e3a5f" titulo="Oi {slug}":
-                    "Bem-vindo, {slug}!"
+                @@card color="#1e3a5f" title="Hi {slug}":
+                    "Welcome, {slug}!"
         @end
 
 page get_profile
@@ -446,7 +446,7 @@ How it works:
 - Client-side: the glue writes the last path segment of `location.pathname`
   into the module's `slug_area` export, and **`{slug}` in any text is
   replaced at render time**. `/profile/joao` renders the card with
-  "Oi joao".
+  "Hi joao".
 - The wasm module is shared by every slug — one module per route pattern:
   `static/profile/[id]/page.wasm`, served at the literal `/profile/[id]/page.wasm`
   URL (the file keeps the brackets exactly like the route).
@@ -520,7 +520,7 @@ compute. The page also carries:
 <div id="ui" data-asx-root="index" data-asx-checksum="474ea74f"
      data-modules="/index.wasm">
   <div data-asx-id="0" style="position:relative;display:flex;...">
-    <span data-asx-id="1" style="...">OLHA O MACACO</span>
+    <span data-asx-id="1" style="...">LOOK AT THE MONKEY</span>
     ...
   </div>
 </div>
