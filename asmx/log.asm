@@ -46,7 +46,7 @@ section .data
     min_m       db 'm', 0
     min_s       db 's)', 10, 0
 
-    banner_pre  db 10, 10, 0
+    banner_pre  db 10, 0
     banner_name db '[ASMX]', 0
     banner_mid  db ': listening on ', 0
     banner_url  db 'http://localhost:', 0
