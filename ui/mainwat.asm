@@ -66,6 +66,11 @@ emit_wat_main:
     ; declarative actions on buttons -> the handle_event func at the end
     ; of the module (after every other export)
     call emit_handle_event
+    ; ssr.state setters: set_<state> (scalars) / set_<state>.<field>
+    ; (object fields) write the hydration snapshot value into state_data
+    ; BEFORE the first render - the glue restores the server-injected
+    ; state so the wasm mounts exactly what the server rendered.
+    call emit_state_setters
     pop r15
     pop r14
     pop r13
@@ -294,6 +299,109 @@ emit_handle_event:
 .done:
     pop r15
     pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; ----------------------------------------------------------------------
+; emit_state_setters - one (func (export "set_<name>") (param $v i32))
+; per scalar state / object int-bool field: writes the value into
+; state_data at $state_base + <offset>. The glue calls set_<key> for
+; every snapshot key (except "root"), so ssr.state values injected by
+; the server are restored BEFORE the first render.
+; ----------------------------------------------------------------------
+emit_state_setters:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    cmp qword [state_count], 0
+    je .done
+    xor r12, r12                ; state idx
+.st_loop:
+    cmp r12, [state_count]
+    jge .done
+    imul rax, r12, STATE_ENTRY
+    lea r13, [state_tab + rax]
+    ; emit "set_" + name
+    lea rdi, [s_set_h1]
+    call out_main_str
+    mov edi, [r13 + S_NAME_PTR]
+    mov esi, [r13 + S_NAME_LEN]
+    lea rdi, [in_buf + rdi]
+    call out_main_bytes
+    cmp dword [r13 + S_IS_OBJ], 1
+    je .obj
+    ; ---- scalar: int/bool only (strings are buffers, no setter) ----
+    cmp dword [r13 + S_KIND], K_STR
+    je .next
+    mov rdi, r12
+    mov rsi, -1
+    call emit_setter_body
+    jmp .next
+.obj:
+    ; ---- object: one setter per int/bool field ----
+    mov eax, [r13 + S_TYPE_IDX]
+    imul rax, rax, TYPE_ENTRY
+    lea r14, [type_tab + rax]
+    mov ebx, [r14 + T_FIELDS_IDX]
+    mov r15d, [r14 + T_N_FIELDS]
+    xor r14, r14                ; field idx
+.f_loop:
+    cmp r14, r15
+    jge .next
+    imul rax, r14, FIELD_ENTRY
+    lea rcx, [field_tab + rbx + rax]
+    cmp dword [rcx + F_KIND], K_STR
+    je .f_next
+    ; "set_<state>.<field>"
+    lea rdi, [s_set_dot]
+    call out_main_str           ; clobbers rcx - recompute the field entry
+    imul rax, r14, FIELD_ENTRY
+    lea rcx, [field_tab + rbx + rax]
+    mov edi, [rcx + F_NAME_PTR]
+    mov esi, [rcx + F_NAME_LEN]
+    lea rdi, [in_buf + rdi]
+    call out_main_bytes
+    mov rdi, r12
+    mov rsi, r14
+    call emit_setter_body
+.f_next:
+    inc r14
+    jmp .f_loop
+.next:
+    inc r12
+    jmp .st_loop
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; emit_setter_body(rdi = state idx, rsi = field idx (-1 scalar)) - emits
+; the rest of the setter func: name close + state_base + offset store.
+; The export name (set_<name>[.<field>]) was already emitted by the
+; caller; this writes the body.
+emit_setter_body:
+    push rbx
+    push r12
+    push r13
+    mov r12, rdi
+    mov r13, rsi
+    lea rdi, [s_set_h2]
+    call out_main_str
+    ; state_field_addr(state, field) -> offset into state_data
+    mov rdi, r12
+    mov rsi, r13
+    call state_field_addr
+    mov rdi, rax
+    call itoa_main
+    lea rdi, [s_set_h3]
+    call out_main_str
     pop r13
     pop r12
     pop rbx
