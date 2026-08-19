@@ -77,6 +77,8 @@ extern asmx_send_status
 extern asmx_send_bytes
 extern route_dispatch
 extern route
+extern slug_buf
+extern slug_len
 extern requests
 ; Request accessors available to handlers (http/getters.asm)
 extern http_get_method_idx
@@ -315,6 +317,14 @@ section .CLIENT progbits align=16
 
 %define req.path    route
 %define req.method  http_req_method
+
+; req.slug - dynamic route slug ("/profile/joao" on /profile/[id] ->
+; "joao"). Null-terminated string buffer; the macro leaves the pointer
+; in rdi and the length in rsi. Empty ("") for static routes.
+%macro req.slug 0
+    lea rdi, [slug_buf]
+    mov rsi, [slug_len]
+%endmacro
 
 %macro req.method_idx 0
     call http_get_method_idx
