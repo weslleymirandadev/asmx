@@ -886,6 +886,48 @@ brackets: `static/profile/[id]/page.wasm`.
 - Single-threaded per request, but concurrent across requests (fork).
   epoll / shared workers is on the roadmap.
 
+## RPC wasm→servidor (`fetch_req` import)
+
+The wasm module cannot touch sockets — the browser owns the network. The
+module imports `env.fetch_req`, implemented by the glue with a
+**synchronous XHR** (the wasm call blocks, so async fetch would never
+resume on the main thread), and the app decides *when* to call and *what*
+to do with the response — all in wasm:
+
+```wat
+(import "env" "fetch_req" (func $fetch_req (param $up i32) (param $ul i32)
+  (param $mp i32) (param $ml i32) (param $bp i32) (param $bl i32)
+  (result i32)))   ;; returns the HTTP status
+```
+
+- Arguments are pointers into linear memory: `url_ptr/url_len`,
+  `method_ptr/method_len`, `body_ptr/body_len` (body 0/0 for none; a
+  non-empty body sends `Content-Type: application/json`).
+- The glue writes the response body into the module memory at
+  `resp_area()` (a 4096-byte buffer after the widget records) and sets
+  `resp_len.value` (mutable exported global). The wasm side reads the
+  buffer directly.
+- `rpc_call(up, ul, mp, ml, bp, bl) -> status` is the exported thin
+  wrapper over the import (also handy for tests/drivers).
+- Exports added by the framework: `resp_area`, `resp_cap` (4096),
+  `resp_len` (global). `$resp_base` is emitted by the compiler right
+  after the widget area (dynamic, like `$widget_base`).
+
+Example (from the wasm side, e.g. a future `onclick="fn()"` handler):
+
+```wat
+;; GET /api/hello -> status; body at resp_area()/resp_len
+i32.const <url> i32.const 11   ;; "/api/hello"
+i32.const <get> i32.const 3    ;; "GET"
+i32.const 0 i32.const 0        ;; no body
+call $fetch_req                ;; status in the stack
+```
+
+Limitations (fase 1): synchronous XHR blocks the UI thread during the
+request (fine for local APIs; a worker + Atomics.wait is the async path
+on the roadmap). The `onclick="fn()"` DSL + `.WASM` section (the "todo
+app with zero JS logic" test of fire) is the next step.
+
 ## Testing
 
 ```bash
