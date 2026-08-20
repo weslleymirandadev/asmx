@@ -3,6 +3,29 @@
 ;; every src/ui/*.wat gets these, like %include in NASM.
 ;; available: $put_pixel, $blend_pixel, $clear, $fill_rect, $draw_line,
 ;;            $draw_circle_filled
+;;
+;; RPC (ROADMAP item 4): the module imports fetch_req from the glue JS
+;; (wasm cannot touch sockets - the browser owns the network). The glue
+;; performs a synchronous XHR (the wasm call blocks, so async fetch is
+;; impossible on the main thread) and writes the response body into the
+;; linear memory at $resp_base (exported as resp_area), with the byte
+;; count in resp_len (exported as a mutable global - the glue sets
+;; e.resp_len.value). Returns the HTTP status. The WASM side decides
+;; WHEN to call and WHAT to do with the response.
+(import "env" "fetch_req" (func $fetch_req (param $up i32) (param $ul i32)
+  (param $mp i32) (param $ml i32) (param $bp i32) (param $bl i32)
+  (result i32)))
+(global $resp_len (export "resp_len") (mut i32) (i32.const 0))
+(func (export "resp_area") (result i32) global.get $resp_base)
+(func (export "resp_cap") (result i32) i32.const 4096)
+;; rpc_call(url_ptr, url_len, method_ptr, method_len, body_ptr, body_len)
+;; -> status. Thin wrapper: lets the app (or a test driver) invoke the
+;; import directly from JS without naming env.fetch_req.
+(func (export "rpc_call") (param $up i32) (param $ul i32) (param $mp i32)
+  (param $ml i32) (param $bp i32) (param $bl i32) (result i32)
+  local.get $up local.get $ul local.get $mp local.get $ml
+  local.get $bp local.get $bl
+  call $fetch_req)
 
 ;; put_pixel(x, y, r, g, b) - write one RGBA pixel (alpha 255)
 (func $put_pixel (param $x i32) (param $y i32)
