@@ -1260,6 +1260,7 @@ parse_attr:
     push r12
     push r13
     push r14
+    push r15
     mov r12, rdi
     mov r13, rsi
     mov r14, rdx
@@ -1292,9 +1293,67 @@ parse_attr:
     call parse_expr
     jmp .done
 .unknown:
-    ; unknown attribute - ignore silently (future: class-if etc.)
-    pop rcx                     ; discard the saved value len
+    ; generic html attribute: store 'name="value" ' into the attr_buf of
+    ; the CURRENT open node (top of istack, same node onclick targets).
+    ; The SSR emits these verbatim after the tag name; the wasm record
+    ; carries a pointer (attr_ptr) so the glue re-applies them on CSR.
+    ; r12=name ptr r13=name len r14=val ptr - all live.
+    pop r9                      ; value len (ALWAYS popped here; the
+                                ; onclick path pops it as rsi above)
+    cmp qword [stack_top], 0
+    je .attr_done
+    mov rax, [stack_top]
+    dec rax
+    shl rax, 3
+    lea rbx, [istack + rax]
+    mov ebx, [rbx + 4]          ; node idx
+    mov rax, [attr_cur]
+    cmp rax, 4096 - 64
+    jge .attr_done
+    lea r15, [attr_buf + rax]   ; write cursor (callee-saved, no calls)
+    mov r11, r15                ; start pointer (for the length)
+    ; name
+    mov rcx, r13
+    lea rsi, [in_buf + r12]
+    xor r8, r8
+.an_copy:
+    cmp r8, rcx
+    jge .an_done
+    mov al, [rsi + r8]
+    mov [r15 + r8], al
+    inc r8
+    jmp .an_copy
+.an_done:
+    add r15, r8
+    ; '="'
+    mov byte [r15], '='
+    mov byte [r15 + 1], '"'
+    add r15, 2
+    ; value
+    mov rcx, r9                ; value len
+    lea rsi, [in_buf + r14]
+    xor r8, r8
+.av_copy:
+    cmp r8, rcx
+    jge .av_done
+    mov al, [rsi + r8]
+    mov [r15 + r8], al
+    inc r8
+    jmp .av_copy
+.av_done:
+    add r15, r8
+    ; '"' (no trailing space - the SSR adds separators itself)
+    mov byte [r15], '"'
+    add r15, 1
+    ; record the extent in attr_off/attr_len of the node
+    mov rax, [attr_cur]
+    mov [attr_off + rbx*4], eax
+    sub r15, r11                ; length written
+    mov [attr_len + rbx*4], r15d
+    add [attr_cur], r15
+.attr_done:
 .done:
+    pop r15
     pop r14
     pop r13
     pop r12
