@@ -340,7 +340,68 @@ compile_block:
     je .tx_ok
     cmp eax, 2
     je .tx_ok
-    jmp .err_text
+    ; view (tag 0) with a bare string line under it: create an implicit
+    ; label child, exactly like inline text after ':' (.inl_found) -
+    ; "string on its own line = text of the open node" applies to views
+    ; too, not just label/button
+    mov rax, [stack_top]
+    dec rax
+    shl rax, 3
+    lea rcx, [istack + rax]
+    mov r9d, [rcx + 4]          ; open node idx (parent)
+    mov eax, [node_count]
+    cmp eax, MAX_NODES
+    jge .err_nodes
+    mov r10d, eax               ; new child idx
+    imul rdx, rax, NODE_SIZE
+    lea rdi, [nodes + rdx]
+    mov ecx, NODE_SIZE
+    xor eax, eax
+    rep stosb
+    mov eax, r10d
+    imul rdx, rax, NODE_SIZE
+    lea rdi, [nodes + rdx]
+    mov byte [rdi + N_TAG], 1
+    mov dword [rdi + N_FS], 13
+    mov dword [rdi + N_PARENT], r9d
+    mov dword [rdi + N_FIRST], -1
+    mov dword [rdi + N_LAST], -1
+    mov dword [rdi + N_NEXT], -1
+    mov dword [rdi + N_BG], -1
+    mov dword [rdi + N_COLOR], -1
+    ; text = line [r15+1, rbx) (r15 = line start, rbx = closing quote)
+    lea eax, [r15 + 1]
+    mov [rdi + N_TEXT_PTR], eax
+    mov eax, ebx
+    sub eax, r15d
+    dec eax
+    mov [rdi + N_TEXT_LEN], eax
+    ; declarative state interpolation ({x} / {x.field})?
+    ; (r15d = child idx survives the call; the line start goes to the
+    ; stack since check_interp clobbers caller-saved regs)
+    push r15                    ; stack: line start
+    mov r15d, r10d              ; child node idx (callee-saved)
+    push rdi                    ; stack: line start, child node ptr
+    mov edx, [rdi + N_TEXT_LEN] ; u32 field!
+    mov rdi, r15
+    mov rax, [rsp + 8]          ; saved line start
+    lea rsi, [rax + 1]          ; text ptr (in_buf offset)
+    call check_interp
+    pop rdi
+    add rsp, 8                  ; drop the saved line start
+    ; parent first/last point at the new child
+    imul r8, r9, NODE_SIZE
+    lea r8, [nodes + r8]
+    cmp dword [r8 + N_FIRST], -1
+    jne .tx_v_has_first
+    mov [r8 + N_FIRST], r15d
+    jmp .tx_v_last
+.tx_v_has_first:
+    mov [r8 + N_LAST], r15d
+.tx_v_last:
+    mov [r8 + N_LAST], r15d
+    inc qword [node_count]
+    jmp .next_line
 .tx_ok:
     cmp dword [rcx + N_TEXT_PTR], 0
     jne .err_text
