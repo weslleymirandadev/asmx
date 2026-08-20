@@ -939,6 +939,27 @@ curl -X POST http://localhost:3000/api/echo -d '{"x":1}'
 curl http://localhost:3000/nonexistent        # custom 404
 ```
 
+### Automated suites (ROADMAP item 5)
+
+```bash
+make -C tests            # CI build: framework + tiny fixture app -> server + wasm
+cd tests && ./build/server &
+node tests/hydration_test.mjs <html> <glue.js> <index.wasm>  # 9 hydration cases
+node tests/fuzz_http.mjs 500                                # HTTP parser fuzz
+```
+
+- `tests/hydration_test.mjs` runs the **real glue** against the **real
+  SSR HTML** with a minimal fake DOM (no jsdom): clean hydration, text
+  mismatch, style divergence, missing/extra node, tag divergence,
+  checksum mismatch, CSR fallback, snapshot restore — 9 cases, exit 0 =
+  all pass.
+- `tests/fuzz_http.mjs` is a black-box socket fuzzer for the HTTP
+  parsers (afl++ cannot instrument pure NASM; with fork-per-connection a
+  crashed child must never take the accept loop down — the health check
+  proves it).
+- `.github/workflows/ci.yml` runs the whole pipeline on push/PR: build,
+  hydration, fuzz, checksum + routes.
+
 ## License
 
 MIT (add your own).

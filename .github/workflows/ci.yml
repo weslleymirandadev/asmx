@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain (nasm, wabt)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm wabt
+
+      - name: Build (framework + fixture app, self-contained)
+        run: make -C tests
+
+      - name: Start the server
+        run: |
+          cd tests && ./build/server > /tmp/asx.log 2>&1 &
+          for i in $(seq 1 20); do
+            if curl -sf -o /dev/null http://localhost:3000/; then break; fi
+            sleep 0.25
+          done
+          curl -sf -o /dev/null http://localhost:3000/ || { cat /tmp/asx.log; exit 1; }
+
+      - name: Hydration test suite (real glue vs real SSR HTML)
+        run: |
+          curl -s http://localhost:3000/ -o /tmp/hv_hyd.html
+          curl -s http://localhost:3000/_asx/glue.js -o /tmp/hv_glue.js
+          node tests/hydration_test.mjs /tmp/hv_hyd.html /tmp/hv_glue.js tests/build/static/index.wasm
+
+      - name: HTTP parser fuzz (black-box, server must survive)
+        run: node tests/fuzz_http.mjs 300
+
+      - name: Checksum SSR<->wasm + routes after fuzz
+        run: |
+          node -e '
+          const fs = require("fs");
+          (async () => {
+            const html = fs.readFileSync("/tmp/hv_hyd.html", "utf8");
+            const m = html.match(/data-asx-checksum="([0-9a-f]+)"/);
+            const bytes = fs.readFileSync("tests/build/static/index.wasm");
+            const { instance } = await WebAssembly.instantiate(bytes, { env: { fetch_req: () => 200 } });
+            const e = instance.exports;
+            e.render();
+            const got = e.ssr_checksum() >>> 0;
+            if (got !== parseInt(m[1], 16)) { console.error("checksum mismatch"); process.exit(1); }
+            console.log("checksum OK, widgets=" + e.widget_count());
+          })();
+          '
+          curl -sf -o /dev/null http://localhost:3000/about || true
+          curl -sf -o /dev/null http://localhost:3000/api/hello
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/missing)" = "404"
+          echo "routes OK"
+
+      - name: Stop the server
+        if: always()
+        run: pkill -f 'build/serve[r]' || true
