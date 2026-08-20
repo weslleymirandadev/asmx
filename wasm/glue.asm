@@ -171,11 +171,11 @@ section .data
  db '      } else {', 10
  db '        // buttons (role 1) shrink to fit their label and', 10
  db '        // get a pointer cursor; plain views stretch 100%', 10
- db '        const ww = (w && w < 720) ? "width:" + w + "px;" : (role === 1 ? "width:auto;align-self:flex-start;cursor:pointer;" : "width:100%;");', 10
+ db '        const ww = (w && w < 720) ? "width:" + w + "px;" : (role === 1 ? "width:auto;align-self:flex-start;cursor:pointer;" : "width:100%;min-width:0;");', 10
  db '        const hid = (flags & 128) ? "display:none;" : "";', 10
  db '        const grd = (flags & 65536) ? "position:relative;display:grid;" + (gcols ? "grid-template-columns:repeat(" + gcols + ",1fr);" : "") : "";', 10
  db '        const wrp = (flags & 256) ? "flex-wrap:wrap;" : "";', 10
- db '        const grw = (flags & 512) ? "flex-grow:1;" : "";', 10
+ db '        const grw = (flags & 512) ? "flex:1 1 0%;" : "";', 10
  db '        const rest = bg + padCss + gapCss + mg + rad + bd + op + sh + ww;', 10
  db '        const css = hid ? "display:none;" : (grd ? grd + rest : "position:relative;display:flex;flex-direction:" + flexDir + ";" + wrp + grw + "align-items:" + items + ";justify-content:" + just + ";" + rest);', 10
  db '        if (el.style.cssText !== css) el.style.cssText = css;', 10

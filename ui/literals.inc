@@ -291,7 +291,7 @@ s_css_grid    db "position:relative;display:grid;", 0
 s_css_grid_cols  db "grid-template-columns:repeat(", 0
 s_css_grid_cols2 db ",1fr);", 0
 s_css_wrap    db "flex-wrap:wrap;", 0
-s_css_grow    db "flex-grow:1;", 0
+s_css_grow    db "flex:1 1 0%;", 0
 s_css_items   db "align-items:", 0
 s_css_just    db ";justify-content:", 0
 s_css_semi    db ";", 0
@@ -322,7 +322,7 @@ s_css_one     db "1;", 0
 s_css_sh      db "box-shadow:0 8px 24px rgba(0,0,0,.35);", 0
 s_css_w       db "width:", 0
 s_css_btn     db "width:auto;align-self:flex-start;cursor:pointer;", 0
-s_css_100     db "width:100%;", 0
+s_css_100     db "width:100%;min-width:0;", 0
 s_css_mh      db "min-height:", 0
 s_css_l_base  db "display:block;font-size:", 0
 s_css_l_col   db "px;color:#", 0
