@@ -163,6 +163,7 @@ s_wat_q       db '\\"', 0
 s_main_wat    db "_main.wat", 0
 s_style_g1    db 10, "(global $style_base i32 (i32.const ", 0
 s_style_g2    db "))", 10, 0
+s_widget_g1   db 10, "(global $widget_base i32 (i32.const ", 0
 s_state_g1    db 10, "(global $state_base i32 (i32.const ", 0
 s_state_g2    db "))", 10, 0
 ; handle_event (declarative actions): (param $t i32) (param $id i32) ...

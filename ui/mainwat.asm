@@ -61,6 +61,12 @@ emit_wat_main:
     ; exports (wat2wasm resolves globals in any order; the styles()
     ; export above reads it)
     call emit_style_global
+    ; $widget_base global - AFTER the style pool (style_addr + style_len),
+    ; not a hardcoded address: the pool grows with the widget count and a
+    ; fixed base lets the style records bleed into the widget area (the
+    ; records inherit stale style bytes in the pad region -> the canonical
+    ; checksum diverges between the server blob and the wasm module).
+    call emit_widget_global
     ; $state_base global (declarative state data addr)
     call emit_state_global
     ; declarative actions on buttons -> the handle_event func at the end
@@ -89,6 +95,27 @@ emit_style_global:
     lea rdi, [s_style_g1]
     call out_main_str
     mov rdi, [style_addr]
+    call itoa_main
+    lea rdi, [s_style_g2]
+    call out_main_str
+    pop r12
+    ret
+
+; ----------------------------------------------------------------------
+; emit_widget_global - "(global $widget_base i32 (i32.const <addr>))"
+; The widget records live AFTER the style pool: style_addr + style_len.
+; The old hardcoded 148512 collided once the pool grew past it (records
+; in the pad region inherited stale style bytes -> checksum mismatch).
+; The address is only known after the component wat is emitted (style_len
+; = rec_count * 16), so it is written here, right after the header, same
+; as $style_base.
+; ----------------------------------------------------------------------
+emit_widget_global:
+    push r12
+    lea rdi, [s_widget_g1]
+    call out_main_str
+    mov rdi, [style_addr]
+    add rdi, [style_len]
     call itoa_main
     lea rdi, [s_style_g2]
     call out_main_str

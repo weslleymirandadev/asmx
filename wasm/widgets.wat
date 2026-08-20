@@ -23,7 +23,9 @@
 ;;   20 parent   i32  (-1 = root)
 ;;   24 font_size u8  (type 1; 0 = default 13px)
 ;;   25..31 pad
-(global $widget_base i32 (i32.const 148512))
+;; $widget_base is emitted by the compiler (ui/mainwat.asm emit_widget_global)
+;; AFTER the style pool (style_addr + style_len) - a hardcoded address here
+;; collides with the style records once the pool grows past it.
 (global $widget_count (mut i32) (i32.const 0))
 (global $widget_cap i32 (i32.const 64))
 (global $ui_dirty (mut i32) (i32.const 1))
