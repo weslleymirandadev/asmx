@@ -70,7 +70,7 @@ process:
     mov rdi, r15
     call find_block_end
     mov rbx, rax                ; end of block
-    ; expand @@ lines (src/components/*.s, {param} args) - the block
+    ; expand @@ lines (src/components/*.asx, {param} args) - the block
     ; may grow/shrink inside in_buf, so re-find the end afterwards
     mov rdi, r15
     mov rsi, rbx

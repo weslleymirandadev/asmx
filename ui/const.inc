@@ -38,7 +38,7 @@
 %define STR_BASE     148000
 
 %define NODE_SIZE    128
-%define MAX_NODES    64
+%define MAX_NODES    128
 %define MAX_STACK    32
 %define MAX_RECORDS  128
 

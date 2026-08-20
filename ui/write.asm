@@ -163,8 +163,8 @@ get_ui_name:
     jne .have_start
     mov rbx, 8
 .have_start:
-    ; end = len - 7 (strip "/page.s" incl. the slash); name = [start, end)
-    lea rcx, [r13 - 7]
+    ; end = len - 9 (strip "/page.asx" incl. the slash); name = [start, end)
+    lea rcx, [r13 - 9]
     mov rdx, rcx
     sub rdx, rbx
     test rdx, rdx

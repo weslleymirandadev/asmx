@@ -30,7 +30,7 @@ msg_blob_len  equ $ - msg_blob
 msg_tag       db "ui-compile: unknown tag: ", 0
 msg_tag_len   equ $ - msg_tag - 1        ; without the null (token follows)
 msg_nl        db 10, 0
-msg_comp_missing db "ui-compile: cannot read component file (src/components/<name>.s)", 10
+msg_comp_missing db "ui-compile: cannot read component file (src/components/<name>.asx)", 10
 msg_comp_missing_len equ $ - msg_comp_missing
 msg_comp_label db "ui-compile: component block not found (label <name>:)", 10
 msg_comp_label_len equ $ - msg_comp_label

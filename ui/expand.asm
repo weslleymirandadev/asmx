@@ -1,9 +1,9 @@
 ; =============================================================================
-; expand.asm - @@ component expansion (src/components/*.s, {param} args)
+; expand.asm - @@ component expansion (src/components/*.asx, {param} args)
 ; =============================================================================
 ;
 ; A line like  @@ <name> key="value" ...  inside an @ DSL block is
-; replaced at compile time by the <name>: block of src/components/<name>.s:
+; replaced at compile time by the <name>: block of src/components/<name>.asx:
 ;   - every line is re-indented to the @@ line level (nesting works);
 ;   - {key} placeholders are substituted by the given values.
 ; Nested @@ lines inside a component expand recursively (depth-limited).
@@ -98,7 +98,7 @@ expand_block:
     jz .no_chl_ext
     add r15, rax
 .no_chl_ext:
-    ; load src/components/<name>.s into comp_buf
+    ; load src/components/<name>.asx into comp_buf
     call load_component
     ; find the <name>: block inside comp_buf
     call find_comp_block        ; rax = content start, rdx = content end
@@ -482,7 +482,7 @@ parse_comp_args:
     call die
 
 ; ----------------------------------------------------------------------
-; load_component - builds comp_path = "src/components/<name>.s" and reads
+; load_component - builds comp_path = "src/components/<name>.asx" and reads
 ; it into comp_buf/comp_len. Dies on a missing file.
 ; ----------------------------------------------------------------------
 load_component:
@@ -500,8 +500,10 @@ load_component:
     mov rdi, r12
     add rdi, r13
     mov byte [rdi], '.'
-    mov byte [rdi + 1], 's'
-    mov byte [rdi + 2], 0
+    mov byte [rdi + 1], 'a'
+    mov byte [rdi + 2], 's'
+    mov byte [rdi + 3], 'x'
+    mov byte [rdi + 4], 0
     lea rdi, [comp_path]
     lea rsi, [comp_buf]
     mov rdx, IN_CAP

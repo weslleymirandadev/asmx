@@ -27,7 +27,7 @@
 ;; AFTER the style pool (style_addr + style_len) - a hardcoded address here
 ;; collides with the style records once the pool grows past it.
 (global $widget_count (mut i32) (i32.const 0))
-(global $widget_cap i32 (i32.const 64))
+(global $widget_cap i32 (i32.const 128))
 (global $ui_dirty (mut i32) (i32.const 1))
 
 ;; ssr_checksum() -> FNV-1a 32 over the canonical first-render IR:
