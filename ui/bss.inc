@@ -58,6 +58,15 @@ save_label_len: resq 1
 style_buf:    resb MAX_RECORDS * 20   ; style records (flags u32/weight u16/...)
 style_len:    resq 1
 style_addr:   resq 1                  ; wasm address of the styles data segment
+variant_tab:  resb MAX_VARIANTS * VAR_ENTRY
+variant_count: resq 1
+node_tmp:     resb NODE_SIZE          ; scratch copy for variant diffing
+; html attributes per node: attr_buf holds 'name="value" ...' strings,
+; attr_off/attr_len are per-node offsets into it (0 = no attributes)
+attr_buf:     resb 4096
+attr_cur:     resq 1
+attr_off:     resd MAX_NODES
+attr_len:     resd MAX_NODES
 ssr_stack:    resb MAX_RECORDS * 8    ; open-view stack for SSR HTML emission
 ssr_top:      resq 1
 ; declarative state tables
