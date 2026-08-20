@@ -35,7 +35,7 @@ jobs:
           node tests/hydration_test.mjs /tmp/hv_hyd.html /tmp/hv_glue.js tests/build/static/index.wasm
 
       - name: HTTP parser fuzz (black-box, server must survive)
-        run: node tests/fuzz_http.mjs 300
+        run: node tests/fuzz_http.mjs 500
 
       - name: Checksum SSR<->wasm + routes after fuzz
         run: |
