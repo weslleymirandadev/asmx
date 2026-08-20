@@ -15,7 +15,7 @@ section .data
     ct_json_len equ $ - ct_json
     ct_text     db "Content-Type: text/plain", 13, 10
     ct_text_len equ $ - ct_text
-    ct_html     db "Content-Type: text/html", 13, 10
+    ct_html     db "Content-Type: text/html; charset=utf-8", 13, 10
     ct_html_len equ $ - ct_html
     ct_ui       db "Content-Type: application/asx-ui", 13, 10
     ct_ui_len   equ $ - ct_ui
