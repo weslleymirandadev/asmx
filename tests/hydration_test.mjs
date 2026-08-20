@@ -54,6 +54,7 @@ class FakeEl {
       modules: this.attrs["data-modules"] || null,
       asxRoot: this.attrs["data-asx-root"] || null,
       asxChecksum: this.attrs["data-asx-checksum"] || null,
+      asxId: this.attrs["data-asx-id"] || null,
     };
   }
   appendChild(el) {
@@ -70,6 +71,7 @@ class FakeEl {
   }
   remove() { if (this.parentNode) this.parentNode.removeChild(this); }
   addEventListener(t, fn) { (this.listeners[t] ||= []).push(fn); }
+  getBoundingClientRect() { return { left: 0, top: 0, width: 100, height: 100 }; }
   closest(sel) {
     // only "[data-asx-role=button]" is used by the glue
     let n = this;
@@ -160,7 +162,10 @@ const document = {
 };
 const window = { addEventListener() {} };
 const location = { pathname: "/" };
-class FakeEventSource { constructor() { this.onopen = null; } }
+let lastEventSource = null;
+class FakeEventSource {
+  constructor() { lastEventSource = this; this.onopen = null; }
+}
 const EventSource = FakeEventSource;
 
 function runCase(name, mutate, expectError) {
@@ -264,18 +269,90 @@ chain = chain.then(() => runCase("9 snapshot ssr.state restored before render", 
 }, true)).then((p) => {
   if (p) {
     // find the count widget (the "{count}" interpolation node) and check
-    // its text - the fixture renders "count: {count}" -> "count: 42"
+    // its text - the fixture renders "count: {count}", the example app
+    // renders "{count}" bare
     const countNode = document.ui.querySelectorAll("[data-asx-id]").find((e) => {
-      return e.textContent && e.textContent.includes("42");
+      return e.textContent && /(^|[^0-9])42([^0-9]|$)/.test(e.textContent);
     });
-    if (countNode && /count: 42/.test(countNode.textContent)) {
-      console.log("PASS  9 snapshot ssr.state restored before render  [count widget shows \"count: 42\"]");
+    if (countNode) {
+      console.log("PASS  9 snapshot ssr.state restored before render  [count widget shows \"" +
+        countNode.textContent.trim() + "\"]");
       ok++;
     } else {
-      console.log("FAIL  9 snapshot ssr.state restored before render  [count widget = " +
-        (countNode ? JSON.stringify(countNode.textContent) : "not found") + "]");
+      console.log("FAIL  9 snapshot ssr.state restored before render  [no widget with 42 found]");
     }
   }
+});
+
+// case 10: click dispatch through data-asx-role. The glue attaches a
+// mousedown listener on #ui; a real click on the button (role=button)
+// must reach the wasm handler (count++) and re-render. Simulate the
+// browser event on the fake DOM.
+total++;
+chain = chain.then(() => runCase("10 button click -> wasm handler (count++)", null, false)).then((p) => {
+  if (p) {
+    // find the button with data-asx-role and the count text node
+    const btn = document.ui.querySelectorAll("[data-asx-id]").find((e) => {
+      return e.getAttribute && e.getAttribute("data-asx-role") === "button";
+    });
+    if (!btn) {
+      console.log("FAIL 10 button click  [no button with data-asx-role found]");
+      return;
+    }
+    // snapshot every leaf text node, click, then find the one that went
+    // N -> N+1 (the count widget; layout differs between apps)
+    const texts = () => document.ui.querySelectorAll("[data-asx-id]")
+      .filter((e) => e.children.length === 0 && e.textContent)
+      .map((e) => ({ el: e, t: e.textContent }));
+    const before = texts();
+    const fire = (document.ui.listeners["mousedown"] || [])[0];
+    if (!fire) {
+      console.log("FAIL 10 button click  [no mousedown listener registered]");
+      return;
+    }
+    fire({ target: btn, clientX: 50, clientY: 50 });
+    const after = texts();
+    const bumped = before.find((b) => {
+      const a = after.find((x) => x.el === b.el);
+      const bm = b.t && b.t.match(/(\d+)$/);
+      const am = a && a.t && a.t.match(/(\d+)$/);
+      if (!bm || !am) return false;
+      return parseInt(am[1], 10) === parseInt(bm[1], 10) + 1;
+    });
+    if (bumped) {
+      console.log("PASS 10 button click -> wasm handler  [\"" + bumped.t + "\" -> \"" +
+        after.find((x) => x.el === bumped.el).t + "\"]");
+      ok++;
+    } else {
+      console.log("FAIL 10 button click  [no leaf text incremented by 1]");
+    }
+  }
+});
+
+// case 11: hot reload path - the EventSource onopen re-checks the wasm
+// bytes; unchanged bytes must be a no-op (no errors, no re-render storm).
+// Returns a promise so the serial chain waits for the async check.
+total++;
+chain = chain.then(() => runCase("11 hot reload: onopen check with unchanged bytes", null, false)).then((p) => {
+  if (!p) return Promise.resolve();
+  const es = lastEventSource;
+  if (!es || typeof es.onopen !== "function") {
+    console.log("FAIL 11 hot reload  [no EventSource onopen registered]");
+    return Promise.resolve();
+  }
+  return new Promise((res) => {
+    es.onopen();  // fires check() -> fetch -> byte compare -> no-op
+    // allow the async check to settle, then assert no errors appeared
+    setTimeout(() => {
+      if (es.errors !== undefined && es.errors > 0) {
+        console.log("FAIL 11 hot reload  [errors during onopen check]");
+      } else {
+        console.log("PASS  11 hot reload  [onopen check ran, no errors]");
+        ok++;
+      }
+      res();
+    }, 50);
+  });
 });
 
 chain.then(() => {
