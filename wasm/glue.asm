@@ -97,7 +97,20 @@ section .data
  db '  // node is missing or its tag type diverges (partial re-render).', 10
  db '  const byId = new Map();', 10
  db '  for (const el of ui.querySelectorAll("[data-asx-id]")) byId.set(el.getAttribute("data-asx-id"), el);', 10
- db '  const tagFor = (type) => type === 1 ? "SPAN" : type === 2 ? "CANVAS" : "DIV";', 10
+ db '  // real HTML tag per widget: index = record byte 1 (tag id from', 10
+ db '  // the tags table in ui/tables.inc - keep in sync!). id 0 = div.', 10
+ db '  const TAG_NAMES = ["div","main","div","section","nav","header","footer","article","aside","figure","blockquote","ul","ol","li","form","table","thead","tbody","tfoot","tr","td","th","details","dialog","video","audio","picture","iframe","canvas","select","textarea","fieldset","dl","dt","dd","menu","hgroup","h1","h2","h3","h4","h5","h6","p","span","a","label","strong","em","code","pre","small","b","i","u","mark","time","cite","q","abbr","sub","sup","kbd","samp","var","del","ins","s","option","figcaption","legend","caption","summary","button","img","input","br","hr","source","meta","link","area","base","col","embed","track","wbr"];', 10
+ db '  const tagFor = (type, tagId) => tagId ? (TAG_NAMES[tagId] || "DIV").toUpperCase() : (type === 1 ? "SPAN" : type === 2 ? "CANVAS" : "DIV");', 10
+ db '  // html attributes from the record (bytes 26..29 = absolute address', 10
+ db '  // of a name="value" ... string; 0 = none). Applied on creation', 10
+ db '  // so CSR nodes carry the same attributes as the SSR ones.', 10
+ db '  const applyAttrs = (el, o, v) => {', 10
+ db '    const ap = v.getUint32(o+26, true);', 10
+ db '    if (!ap) return;', 10
+ db '    let s = "", p = ap; while (v.getUint8(p) !== 0) s += String.fromCharCode(v.getUint8(p++));', 10
+ db '    const re = /([a-zA-Z][a-zA-Z0-9-]*)="([^"]*)"/g; let m;', 10
+ db '    while ((m = re.exec(s))) { try { el.setAttribute(m[1], m[2]); } catch (e) {} }', 10
+ db '  };', 10
  db '  // flexbox layout: views are flex containers, texts flow', 10
  db '  // inside them. x/y from the module are the fallback size.', 10
  db '  const syncDOM = () => {', 10
@@ -107,16 +120,18 @@ section .data
  db '    for (let i = 0; i < n; i++) {', 10
  db '      const o = base + i*32;', 10
  db '      const type = v.getUint8(o);', 10
+ db '      const tagId = v.getUint8(o+1);', 10
  db '      const w = v.getInt16(o+6,true), h = v.getInt16(o+8,true);', 10
  db '      const r = v.getUint8(o+12), g = v.getUint8(o+13), b = v.getUint8(o+14);', 10
  db '      const parent = v.getInt32(o+20,true);', 10
  db '      let el = els[i];', 10
  db '      if (!el) el = byId.get(String(i)) || null;', 10
- db '      const want = tagFor(type);', 10
+ db '      const want = tagFor(type, tagId);', 10
  db '      if (!el || el.tagName !== want) {', 10
  db '        if (el) console.error("ASX Hydration Error: node " + i + " structural mismatch expected <" + want.toLowerCase() + "> got <" + el.tagName.toLowerCase() + "> (re-created, subtree client-rendered)");', 10
  db '        el = document.createElement(want.toLowerCase());', 10
  db '        byId.set(String(i), el);', 10
+ db '        applyAttrs(el, o, v);', 10
  db '      }', 10
  db '      els[i] = el;', 10
  db '      const so = stBase + i*20;', 10
@@ -155,7 +170,8 @@ section .data
  db '        const tt = (flags & 8192) ? "text-transform:uppercase;" : (flags & 1048576) ? "text-transform:lowercase;" : "";', 10
  db '        const it = (flags & 16384) ? "font-style:italic;" : "";', 10
  db '        const un = (flags & 32768) ? "text-decoration:underline;" : (flags & 2097152) ? "text-decoration:line-through;" : "";', 10
- db '        const css = "display:block;font-size:" + fs + "px;" + col + fw + ta + tt + it + un + "line-height:1.4;";', 10
+ db '        const mgL = (mt||mb) ? "margin:" + mt + "px 0 " + mb + "px;" : "";', 10
+ db '        const css = "display:block;font-size:" + fs + "px;" + col + fw + ta + tt + it + un + mgL + "line-height:1.4;";', 10
  db '        if (el.style.cssText !== css) el.style.cssText = css;', 10
  db '        const tp = v.getUint32(o+16,true);', 10
  db '        let end = tp; while (v.getUint8(end) !== 0) end++;', 10
