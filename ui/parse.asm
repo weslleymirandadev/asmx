@@ -362,6 +362,7 @@ compile_block:
     imul rdx, rax, NODE_SIZE
     lea rdi, [nodes + rdx]
     mov byte [rdi + N_TAG], 1
+    mov byte [rdi + N_TAG_ID], TAG_SPAN
     mov dword [rdi + N_FS], 13
     mov dword [rdi + N_PARENT], r9d
     mov dword [rdi + N_FIRST], -1
@@ -480,7 +481,7 @@ compile_block:
     call tag_lookup
     cmp rax, -1
     je .err_tag
-    mov r8d, eax                ; tag id
+    mov r8d, eax                ; real tag id (1..N)
     mov ebx, [node_count]
     cmp ebx, MAX_NODES
     jge .err_nodes
@@ -492,7 +493,9 @@ compile_block:
     rep stosb
     imul rcx, rbx, NODE_SIZE
     lea rdi, [nodes + rcx]
-    mov [rdi + N_TAG], r8b
+    mov [rdi + N_TAG_ID], r8b   ; real HTML tag id
+    movzx eax, byte [tag_kind + r8]
+    mov [rdi + N_TAG], al       ; kind: 0=view 1=label 2=button
     mov dword [rdi + N_FS], 13
     mov dword [rdi + N_PARENT], -1
     mov dword [rdi + N_FIRST], -1
@@ -559,7 +562,8 @@ compile_block:
     lea rdi, [nodes + rcx]
     mov rsi, r9
     mov rdx, r14
-    ; find a ':' in [r9, r14) - the inline text separator
+    ; find a ':' in [r9, r14) - the inline text separator, UNLESS it is
+    ; a variant prefix separator (hover:/sm:/md:/... - then keep looking)
     mov r8, r9
 .cls_scan:
     cmp r8, r14
@@ -569,8 +573,91 @@ compile_block:
     inc r8
     jmp .cls_scan
 .cls_colon:
-    mov rdx, r8                 ; classes end at the colon
+    ; token before the ':' = [last space, r8). If it is a variant
+    ; prefix, this ':' belongs to the class (hover:bg-x), skip it.
+    ; LOCAL byte check only - no calls: variant_bp clobbers caller-
+    ; saved regs that are live here (r8 cursor, r9 classes start,
+    ; rbx node idx, r14 line end). rdi/rsi are recomputed at .cls_done.
+    mov rax, r8
+.cls_ws_back:
+    cmp rax, r9
+    jbe .cls_tok_done
+    mov cl, [in_buf + rax - 1]
+    cmp cl, ' '
+    je .cls_tok_done
+    cmp cl, 9
+    je .cls_tok_done
+    dec rax
+    jmp .cls_ws_back
+.cls_tok_done:
+    ; token = [rax, r8); len = rcx = r8 - rax
+    mov rcx, r8
+    sub rcx, rax
+    cmp rcx, 5
+    jne .t_len3
+    cmp byte [in_buf + rax], 'h'      ; hover:
+    jne .real_colon
+    cmp byte [in_buf + rax + 1], 'o'
+    jne .real_colon
+    cmp byte [in_buf + rax + 2], 'v'
+    jne .real_colon
+    cmp byte [in_buf + rax + 3], 'e'
+    jne .real_colon
+    cmp byte [in_buf + rax + 4], 'r'
+    jne .real_colon
+    jmp .cls_variant
+.t_len3:
+    cmp rcx, 3
+    jne .t_len2
+    cmp byte [in_buf + rax], '2'      ; 2xl:
+    jne .real_colon
+    cmp byte [in_buf + rax + 1], 'x'
+    jne .real_colon
+    cmp byte [in_buf + rax + 2], 'l'
+    jne .real_colon
+    jmp .cls_variant
+.t_len2:
+    cmp rcx, 2
+    jne .real_colon
+    movzx edx, byte [in_buf + rax]
+    movzx ecx, byte [in_buf + rax + 1]
+    cmp edx, 'x'                      ; xs: / xl:
+    jne .t_sm
+    cmp ecx, 's'
+    je .cls_variant
+    cmp ecx, 'l'
+    je .cls_variant
+    jmp .real_colon
+.t_sm:
+    cmp edx, 's'                      ; sm:
+    jne .t_md
+    cmp ecx, 'm'
+    je .cls_variant
+    jmp .real_colon
+.t_md:
+    cmp edx, 'm'                      ; md:
+    jne .t_lg
+    cmp ecx, 'd'
+    je .cls_variant
+    jmp .real_colon
+.t_lg:
+    cmp edx, 'l'                      ; lg:
+    jne .real_colon
+    cmp ecx, 'g'
+    je .cls_variant
+    jmp .real_colon
+.real_colon:
+    mov rdx, r8                 ; real inline-text colon
+    jmp .cls_done
+.cls_variant:
+    inc r8
+    jmp .cls_scan
 .cls_done:
+    ; node base (rdi) + classes start (rsi) were clobbered by the
+    ; byte checks above - recompute both for parse_classes
+    imul rcx, rbx, NODE_SIZE
+    lea rdi, [nodes + rcx]
+    mov rsi, r9
     push r14                    ; parse_classes clobbers r14 (line end)
     push rdx                    ; ... and rdx (the colon offset)
     call parse_classes
@@ -627,6 +714,7 @@ compile_block:
     imul rdx, rax, NODE_SIZE
     lea rdi, [nodes + rdx]
     mov byte [rdi + N_TAG], 1
+    mov byte [rdi + N_TAG_ID], TAG_SPAN
     mov dword [rdi + N_FS], 13
     mov dword [rdi + N_PARENT], ebx
     mov dword [rdi + N_FIRST], -1
@@ -1019,7 +1107,147 @@ tw_lookup:
 ; ----------------------------------------------------------------------
 ; class_apply(rdi = base, rsi = token, rdx = token len)
 ; ----------------------------------------------------------------------
+; Variant wrapper: if the token starts with a responsive/hover prefix
+; (hover: xs: sm: md: lg: xl: 2xl:), the class is applied to a scratch
+; copy of the node and the CHANGED style fields are recorded in
+; variant_tab (node, breakpoint, field, value) - the base node itself is
+; untouched, so the SSR/wasm render the base layout and the emitted
+; <style data-asx-variants> block overrides it at the breakpoint/hover.
 class_apply:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi                ; node base
+    mov r13, rsi                ; token ptr
+    mov r14, rdx                ; token len
+    ; scan for ':' (variant separator)
+    xor rbx, rbx
+.scan:
+    cmp rbx, r14
+    jge .no_var
+    cmp byte [r13 + rbx], ':'
+    je .have_var
+    inc rbx
+    jmp .scan
+.have_var:
+    ; prefix len = rbx, class token = [r13+rbx+1, r13+r14)
+    ; match the prefix -> breakpoint id
+    mov rdi, r13
+    mov rsi, rbx
+    call variant_bp            ; rax = bp (0=hover 1=xs 2=sm 3=md 4=lg 5=xl 6=2xl) or -1
+    cmp rax, -1
+    je .no_var
+    push rax                    ; bp (callee-saved r12-r15 are busy)
+    ; copy the node to node_tmp (scratch)
+    mov rdi, node_tmp
+    mov rsi, r12
+    mov rcx, NODE_SIZE
+    rep movsb
+    ; apply the class to node_tmp (base = node_tmp, token = rest)
+    lea rdi, [node_tmp]
+    lea rsi, [r13 + rbx + 1]
+    mov rdx, r14
+    sub rdx, rbx
+    dec rdx
+    call class_apply_core
+    ; diff the style fields between the real node and node_tmp; every
+    ; change becomes a variant entry. NOTE: r9 is caller-saved and the
+    ; parse_classes loop relies on it right after class_apply returns -
+    ; keep the bp in r15 instead (r15 is callee-saved and unused here).
+    pop r15                     ; bp
+    mov r8, r12
+    sub r8, nodes
+    shr r8, 7                   ; node idx (NODE_SIZE = 128)
+    ; field table: (offset u32, size u32) - compare + record
+    lea r10, [var_fields]
+.var_loop:
+    cmp r10, var_fields_end
+    jge .done
+    mov eax, [r10]              ; field offset
+    mov ecx, [r10 + 4]          ; size (4 or 1)
+    ; read both values
+    mov r11d, eax
+    mov edx, 0
+    cmp ecx, 1
+    jne .rd4
+    movzx edx, byte [node_tmp + r11]
+    movzx ebx, byte [r12 + r11]
+    jmp .have_vals
+.rd4:
+    mov edx, [node_tmp + r11]
+    mov ebx, [r12 + r11]
+.have_vals:
+    cmp edx, ebx
+    je .var_next
+    ; changed: record (node, bp, field, value)
+    cmp qword [variant_count], MAX_VARIANTS
+    jge .var_next
+    mov rdi, [variant_count]
+    imul rdi, rdi, VAR_ENTRY
+    lea rdi, [variant_tab + rdi]
+    mov [rdi + V_NODE], r8d
+    mov [rdi + V_BP], r15d
+    mov [rdi + V_FIELD], eax
+    mov [rdi + V_VALUE], edx
+    inc qword [variant_count]
+.var_next:
+    add r10, 8
+    jmp .var_loop
+.no_var:
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, r14
+    call class_apply_core
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; variant_bp(rdi = prefix ptr, rsi = prefix len) -> bp id or -1
+variant_bp:
+    push r12
+    push r13
+    push r14
+    mov r12, rdi
+    mov r13, rsi
+    lea r14, [var_prefixes]
+.bp_loop:
+    cmp r14, var_prefixes_end
+    jge .none
+    mov rdi, [r14]              ; literal ptr
+    mov rsi, [r14 + 8]          ; literal len
+    cmp rsi, r13
+    jne .bp_next
+    mov rdi, [r14]
+    mov rsi, r12
+    mov rdx, r13
+    call strncmp
+    test rax, rax
+    jz .found
+.bp_next:
+    add r14, 24
+    jmp .bp_loop
+.found:
+    mov rax, [r14 + 16]         ; bp id
+    jmp .done
+.none:
+    mov rax, -1
+.done:
+    pop r14
+    pop r13
+    pop r12
+    ret
+
+; ----------------------------------------------------------------------
+; class_apply_core(rdi = base, rsi = token, rdx = token len) - the
+; actual class application (no variant handling).
+; ----------------------------------------------------------------------
+class_apply_core:
     push rbx
     push r12
     push r13
