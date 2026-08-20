@@ -1028,6 +1028,14 @@ class_apply:
     mov r13, rsi
     mov r14, rdx
     ; ---- exact-name tables (flags / rounded / font-weight / shadow) ----
+    ; tw_lookup(rdi = token ptr, rsi = token LEN, rdx = table, rcx = end).
+    ; BOTH must be re-set before every call: on entry rdi = node base and
+    ; rsi = token ptr (caller-saved, clobbered by strncmp inside the
+    ; lookup). Bug: with rsi = token ptr, cmp rax, r13 compared strlen
+    ; against an ADDRESS -> every exact-name class returned -1 and
+    ; flex/rounded/font/shadow silently never applied.
+    mov rdi, r13
+    mov rsi, r14
     lea rdx, [tw_flags]
     lea rcx, [tw_flags_end]
     call tw_lookup
@@ -1036,6 +1044,8 @@ class_apply:
     or [r12 + N_FLAGS], eax
     jmp .done
 .not_flags:
+    mov rdi, r13
+    mov rsi, r14
     lea rdx, [tw_round]
     lea rcx, [tw_round_end]
     call tw_lookup
@@ -1044,6 +1054,8 @@ class_apply:
     mov [r12 + N_RADIUS], eax
     jmp .done
 .not_round:
+    mov rdi, r13
+    mov rsi, r14
     lea rdx, [tw_fontw]
     lea rcx, [tw_fontw_end]
     call tw_lookup
@@ -1055,6 +1067,8 @@ class_apply:
     or dword [r12 + N_FLAGS], F_BOLD
     jmp .done
 .not_fontw:
+    mov rdi, r13
+    mov rsi, r14
     lea rdx, [tw_shadow]
     lea rcx, [tw_shadow_end]
     call tw_lookup
@@ -1063,6 +1077,59 @@ class_apply:
     mov [r12 + N_SHADOW], eax
     jmp .done
 .not_shadow:
+    ; text-center / text-right / text-justify -> N_ALIGN (the label CSS
+    ; reads the align byte; MUST run before the text-<color>/text-<size>
+    ; prefix below, which would otherwise swallow the whole token)
+    ; strncmp(rdi = token, rsi = literal, rdx = len)
+    mov rdi, r13
+    lea rsi, [s_text_center]
+    mov rdx, 11
+    call strncmp
+    test rax, rax
+    jnz .not_tc
+    mov byte [r12 + N_ALIGN], 1
+    jmp .done
+.not_tc:
+    mov rdi, r13
+    lea rsi, [s_text_right]
+    mov rdx, 10
+    call strncmp
+    test rax, rax
+    jnz .not_tr
+    mov byte [r12 + N_ALIGN], 2
+    jmp .done
+.not_tr:
+    mov rdi, r13
+    lea rsi, [s_text_justify]
+    mov rdx, 12
+    call strncmp
+    test rax, rax
+    jnz .not_tj
+    mov byte [r12 + N_ALIGN], 3
+    jmp .done
+.not_tj:
+    ; grid-cols-<n> (requires the grid flag to take effect)
+    cmp r14d, 10
+    jb .not_gc
+    lea rdi, [r13]
+    lea rsi, [s_grid_cols]
+    mov rdx, 10
+    call strncmp
+    test rax, rax
+    jnz .not_gc
+    mov rdi, r13
+    add rdi, 10
+    mov rsi, r14
+    sub rsi, 10
+    lea rdx, [tw_gridcols]
+    lea rcx, [tw_gridcols_end]
+    call tw_lookup
+    cmp rax, -1
+    je .not_gc
+    or dword [r12 + N_FLAGS], F_GRID
+    mov [r12 + N_GRID_COLS], al
+    jmp .done
+.not_gc:
     ; ---- numeric prefixes ----
     ; gap-<n>
     cmp r14d, 4

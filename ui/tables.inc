@@ -681,6 +681,7 @@ s_flex_col  db "flex-col", 0
 s_flex_row  db "flex-row", 0
 s_flex_wrap db "flex-wrap", 0
 s_flex_1    db "flex-1", 0
+s_grid      db "grid", 0
 s_items_start db "items-start", 0
 s_items_center db "items-center", 0
 s_items_end db "items-end", 0
@@ -710,29 +711,57 @@ tw_flags:
     dq s_flex_row, F_FLEX
     dq s_flex_wrap, F_FLEX | F_WRAP
     dq s_flex_1, F_GROW
+    dq s_grid, F_GRID
     dq s_items_start, 0
     dq s_items_center, F_ITEMSC
     dq s_items_end, F_ITEMSE
-    dq s_items_stretch, 0
+    dq s_items_stretch, F_ITEMST
     dq s_justify_start, 0
     dq s_justify_center, F_JUSTC
     dq s_justify_end, F_JUSTE
     dq s_justify_between, F_JUSTB
-    dq s_justify_around, F_JUSTB
-    dq s_justify_evenly, F_JUSTB
+    dq s_justify_around, F_JUSTA
+    dq s_justify_evenly, F_JUSTV
     dq s_hidden, F_HIDDEN
-    dq s_text_center, F_CENTER
-    dq s_text_right, F_RIGHT
-    dq s_text_justify, 0
     dq s_uppercase, F_UPPER
-    dq s_lowercase, 0
+    dq s_lowercase, F_LOWER
     dq s_italic, F_ITALIC
     dq s_underline, F_UNDER
-    dq s_line_through, F_UNDER
+    dq s_line_through, F_LINE
     dq s_no_underline, 0
     dq s_bold, F_BOLD
     dq s_semibold, F_BOLD
 tw_flags_end:
+
+; grid-cols-N -> column count (1..12); needs F_GRID to take effect
+s_grid_cols db "grid-cols-", 0
+s_gc_1      db "1", 0
+s_gc_2      db "2", 0
+s_gc_3      db "3", 0
+s_gc_4      db "4", 0
+s_gc_5      db "5", 0
+s_gc_6      db "6", 0
+s_gc_7      db "7", 0
+s_gc_8      db "8", 0
+s_gc_9      db "9", 0
+s_gc_10     db "10", 0
+s_gc_11     db "11", 0
+s_gc_12     db "12", 0
+
+tw_gridcols:
+    dq s_gc_1, 1
+    dq s_gc_2, 2
+    dq s_gc_3, 3
+    dq s_gc_4, 4
+    dq s_gc_5, 5
+    dq s_gc_6, 6
+    dq s_gc_7, 7
+    dq s_gc_8, 8
+    dq s_gc_9, 9
+    dq s_gc_10, 10
+    dq s_gc_11, 11
+    dq s_gc_12, 12
+tw_gridcols_end:
 
 s_round_none db "rounded-none", 0
 s_round_sm   db "rounded-sm", 0

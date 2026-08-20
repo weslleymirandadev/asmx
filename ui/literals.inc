@@ -286,7 +286,13 @@ s_ssr_cv2   db '"></canvas>', 0
 
 ; --- inline CSS (must mirror wasm/glue.asm's cssText builders) ---
 s_css_v_base  db "position:relative;display:flex;flex-direction:", 0
-s_css_items   db ";align-items:", 0
+s_css_hidden  db "display:none;", 0
+s_css_grid    db "position:relative;display:grid;", 0
+s_css_grid_cols  db "grid-template-columns:repeat(", 0
+s_css_grid_cols2 db ",1fr);", 0
+s_css_wrap    db "flex-wrap:wrap;", 0
+s_css_grow    db "flex-grow:1;", 0
+s_css_items   db "align-items:", 0
 s_css_just    db ";justify-content:", 0
 s_css_semi    db ";", 0
 s_css_col     db "column", 0
@@ -295,6 +301,9 @@ s_css_center  db "center", 0
 s_css_fs      db "flex-start", 0
 s_css_fe      db "flex-end", 0
 s_css_sb      db "space-between", 0
+s_css_sa      db "space-around", 0
+s_css_sv      db "space-evenly", 0
+s_css_stretch db "stretch", 0
 s_css_bg      db "background:#", 0
 s_css_pad     db "padding:", 0
 s_css_px_sp   db "px ", 0
@@ -322,8 +331,10 @@ s_css_ta_c    db "text-align:center;", 0
 s_css_ta_r    db "text-align:right;", 0
 s_css_ta_j    db "text-align:justify;", 0
 s_css_tt      db "text-transform:uppercase;", 0
+s_css_lo      db "text-transform:lowercase;", 0
 s_css_it      db "font-style:italic;", 0
 s_css_un      db "text-decoration:underline;", 0
+s_css_ln      db "text-decoration:line-through;", 0
 s_css_lh      db "line-height:1.4;", 0
 s_css_cv_base db "display:block;width:", 0
 s_css_cv_h    db "height:", 0

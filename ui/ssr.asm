@@ -386,12 +386,39 @@ ssr_css_view:
     mov r12, rdi
     imul rax, r12, 32
     lea rbx, [blob_buf + rax + 24]   ; 32B record
-    imul rax, r12, 16
-    lea r13, [style_buf + rax]       ; 16B style record
+    imul rax, r12, 20
+    lea r13, [style_buf + rax]       ; 20B style record
+    ; hidden? display:none wins over everything (no flex/grid emit)
+    mov eax, [r13]
+    test eax, F_HIDDEN
+    jz .not_hidden
+    lea rdi, [s_css_hidden]
+    call out_str
+    jmp .done_css
+.not_hidden:
+    mov eax, [r13]
+    ; grid? display:grid + grid-template-columns:repeat(N,1fr), then the
+    ; shared props (bg/pad/gap/...) - no flex-direction/align/justify
+    test eax, F_GRID
+    jz .not_grid
+    lea rdi, [s_css_grid]
+    call out_str
+    movzx edi, byte [r13 + 19]
+    test edi, edi
+    jz .no_gridc
+    lea rdi, [s_css_grid_cols]
+    call out_str
+    movzx edi, byte [r13 + 19]
+    call ssr_dec
+    lea rdi, [s_css_grid_cols2]
+    call out_str
+.no_gridc:
+    jmp .grid_skip
+.not_grid:
+    ; flex-direction: flags&1 ? (flags&2 ? column : row) : column
     lea rdi, [s_css_v_base]
     call out_str
-    ; flex-direction: flags&1 ? (flags&2 ? column : row) : column
-    movzx eax, word [r13]
+    mov eax, [r13]
     test eax, F_FLEX
     jz .col
     test eax, F_FLEXCOL
@@ -403,14 +430,32 @@ ssr_css_view:
     lea rdi, [s_css_row]
 .dir_done:
     call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    ; flex-wrap
+    mov eax, [r13]
+    test eax, F_WRAP
+    jz .no_wrap
+    lea rdi, [s_css_wrap]
+    call out_str
+.no_wrap:
+    ; flex-grow (flex-1)
+    mov eax, [r13]
+    test eax, F_GROW
+    jz .no_grow
+    lea rdi, [s_css_grow]
+    call out_str
+.no_grow:
     ; align-items
     lea rdi, [s_css_items]
     call out_str
-    movzx eax, word [r13]
+    mov eax, [r13]
     test eax, F_ITEMSC
     jnz .items_c
     test eax, F_ITEMSE
     jnz .items_e
+    test eax, F_ITEMST
+    jnz .items_s
     lea rdi, [s_css_fs]
     jmp .items_done
 .items_c:
@@ -418,18 +463,25 @@ ssr_css_view:
     jmp .items_done
 .items_e:
     lea rdi, [s_css_fe]
+    jmp .items_done
+.items_s:
+    lea rdi, [s_css_stretch]
 .items_done:
     call out_str
     ; justify-content
     lea rdi, [s_css_just]
     call out_str
-    movzx eax, word [r13]
+    mov eax, [r13]
     test eax, F_JUSTC
     jnz .just_c
     test eax, F_JUSTB
     jnz .just_b
     test eax, F_JUSTE
     jnz .just_e
+    test eax, F_JUSTA
+    jnz .just_a
+    test eax, F_JUSTV
+    jnz .just_v
     lea rdi, [s_css_fs]
     jmp .just_done
 .just_c:
@@ -440,10 +492,17 @@ ssr_css_view:
     jmp .just_done
 .just_e:
     lea rdi, [s_css_fe]
+    jmp .just_done
+.just_a:
+    lea rdi, [s_css_sa]
+    jmp .just_done
+.just_v:
+    lea rdi, [s_css_sv]
 .just_done:
     call out_str
     lea rdi, [s_css_semi]
     call out_str
+.grid_skip:
     ; background: only when the record is opaque (alpha != 0)
     movzx eax, byte [rbx + 15]
     test eax, eax
@@ -460,46 +519,46 @@ ssr_css_view:
     call out_str
 .no_bg:
     ; padding: (px||pad) ? "padding:" + (py||pad) + "px " + (px||pad) + "px;"
-    movzx eax, byte [r13 + 6]    ; px
+    movzx eax, byte [r13 + 9]    ; px
     test eax, eax
     jnz .have_px
-    movzx eax, byte [r13 + 12]   ; pad
+    movzx eax, byte [r13 + 15]   ; pad
 .have_px:
     test eax, eax
     jz .no_pad
     lea rdi, [s_css_pad]
     call out_str
-    movzx edi, byte [r13 + 7]    ; py
+    movzx edi, byte [r13 + 10]   ; py
     test edi, edi
     jnz .have_py
-    movzx edi, byte [r13 + 12]
+    movzx edi, byte [r13 + 15]
 .have_py:
     call ssr_dec
     lea rdi, [s_css_px_sp]
     call out_str
-    movzx edi, byte [r13 + 6]
+    movzx edi, byte [r13 + 9]
     test edi, edi
     jnz .have_px2
-    movzx edi, byte [r13 + 12]
+    movzx edi, byte [r13 + 15]
 .have_px2:
     call ssr_dec
     lea rdi, [s_css_px_semi]
     call out_str
 .no_pad:
     ; gap
-    movzx eax, byte [r13 + 4]
+    movzx eax, byte [r13 + 7]
     test eax, eax
     jz .no_gap
     lea rdi, [s_css_gap]
     call out_str
-    movzx edi, byte [r13 + 4]
+    movzx edi, byte [r13 + 7]
     call ssr_dec
     lea rdi, [s_css_px_semi]
     call out_str
 .no_gap:
     ; margin: (mt||mb)
-    movzx eax, byte [r13 + 13]   ; mt
-    movzx ecx, byte [r13 + 14]   ; mb
+    movzx eax, byte [r13 + 16]   ; mt
+    movzx ecx, byte [r13 + 17]   ; mb
     test eax, eax
     jnz .have_mg
     test ecx, ecx
@@ -507,17 +566,17 @@ ssr_css_view:
 .have_mg:
     lea rdi, [s_css_mg]
     call out_str
-    movzx edi, byte [r13 + 13]
+    movzx edi, byte [r13 + 16]
     call ssr_dec
     lea rdi, [s_css_px0]
     call out_str
-    movzx edi, byte [r13 + 14]
+    movzx edi, byte [r13 + 17]
     call ssr_dec
     lea rdi, [s_css_px_semi]
     call out_str
 .no_mg:
     ; radius
-    movzx eax, byte [r13 + 5]
+    movzx eax, byte [r13 + 8]
     test eax, eax
     jz .no_rad
     cmp eax, 255
@@ -528,24 +587,24 @@ ssr_css_view:
 .rad_n:
     lea rdi, [s_css_rad]
     call out_str
-    movzx edi, byte [r13 + 5]
+    movzx edi, byte [r13 + 8]
     call ssr_dec
     lea rdi, [s_css_px_semi]
     call out_str
 .no_rad:
     ; border
-    movzx eax, byte [r13 + 8]
+    movzx eax, byte [r13 + 11]
     test eax, eax
     jz .no_bd
     lea rdi, [s_css_bd1]
     call out_str
-    movzx edi, byte [r13 + 8]
+    movzx edi, byte [r13 + 11]
     call ssr_dec
     lea rdi, [s_css_bd2]
     call out_str
 .no_bd:
     ; opacity (0-100 -> "0.XX" / "1")
-    movzx eax, byte [r13 + 9]
+    movzx eax, byte [r13 + 12]
     test eax, eax
     jz .no_op
     lea rdi, [s_css_op]
@@ -569,7 +628,7 @@ ssr_css_view:
     call out_str
 .no_op:
     ; shadow
-    movzx eax, byte [r13 + 10]
+    movzx eax, byte [r13 + 13]
     test eax, eax
     jz .no_sh
     lea rdi, [s_css_sh]
@@ -589,7 +648,7 @@ ssr_css_view:
     call out_str
     jmp .ww_done
 .ww_auto:
-    cmp byte [r13 + 11], 1
+    cmp byte [r13 + 14], 1
     jne .ww_stretch
     lea rdi, [s_css_btn]
     call out_str
@@ -599,16 +658,17 @@ ssr_css_view:
     call out_str
 .ww_done:
     ; min-height (h-*)
-    movzx eax, byte [r13 + 15]
+    movzx eax, byte [r13 + 18]
     test eax, eax
     jz .no_hh
     lea rdi, [s_css_mh]
     call out_str
-    movzx edi, byte [r13 + 15]
+    movzx edi, byte [r13 + 18]
     call ssr_dec
     lea rdi, [s_css_px_semi]
     call out_str
 .no_hh:
+.done_css:
     pop r13
     pop r12
     pop rbx
@@ -624,7 +684,7 @@ ssr_css_label:
     mov r12, rdi
     imul rax, r12, 32
     lea rbx, [blob_buf + rax + 24]
-    imul rax, r12, 16
+    imul rax, r12, 20
     lea r13, [style_buf + rax]
     lea rdi, [s_css_l_base]      ; "display:block;font-size:"
     call out_str
@@ -644,19 +704,19 @@ ssr_css_label:
     call ssr_hex2
     lea rdi, [s_css_semi]
     call out_str
-    ; font-weight
-    movzx eax, byte [r13 + 2]
+    ; font-weight (u16 - 100..900 fits)
+    movzx eax, word [r13 + 4]
     test eax, eax
     jz .no_fw
     lea rdi, [s_css_fw]
     call out_str
-    movzx edi, byte [r13 + 2]
+    movzx edi, word [r13 + 4]
     call ssr_dec
     lea rdi, [s_css_semi]
     call out_str
 .no_fw:
     ; text-align
-    movzx eax, byte [r13 + 3]
+    movzx eax, byte [r13 + 6]
     cmp eax, 1
     je .ta_c
     cmp eax, 2
@@ -675,25 +735,37 @@ ssr_css_label:
 .ta_done:
     call out_str
 .no_ta:
-    ; uppercase / italic / underline (style flags)
-    movzx eax, word [r13]
+    ; uppercase / lowercase / italic / underline / line-through
+    mov eax, [r13]
     test eax, F_UPPER
     jz .no_tt
     lea rdi, [s_css_tt]
     call out_str
 .no_tt:
-    movzx eax, word [r13]
+    mov eax, [r13]
+    test eax, F_LOWER
+    jz .no_lo
+    lea rdi, [s_css_lo]
+    call out_str
+.no_lo:
+    mov eax, [r13]
     test eax, F_ITALIC
     jz .no_it
     lea rdi, [s_css_it]
     call out_str
 .no_it:
-    movzx eax, word [r13]
+    mov eax, [r13]
     test eax, F_UNDER
     jz .no_un
     lea rdi, [s_css_un]
     call out_str
 .no_un:
+    mov eax, [r13]
+    test eax, F_LINE
+    jz .no_ln
+    lea rdi, [s_css_ln]
+    call out_str
+.no_ln:
     lea rdi, [s_css_lh]          ; "line-height:1.4;"
     call out_str
     pop r13

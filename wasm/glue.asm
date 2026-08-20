@@ -119,22 +119,23 @@ section .data
  db '        byId.set(String(i), el);', 10
  db '      }', 10
  db '      els[i] = el;', 10
- db '      const so = stBase + i*16;', 10
- db '      const flags = stBase ? v.getUint16(so,true) : 0;', 10
- db '      const weight = stBase ? v.getUint8(so+2) : 0;', 10
- db '      const align = stBase ? v.getUint8(so+3) : 0;', 10
- db '      const gap = stBase ? v.getUint8(so+4) : 0;', 10
- db '      const radius = stBase ? v.getUint8(so+5) : 0;', 10
- db '      const px = stBase ? v.getUint8(so+6) : 0;', 10
- db '      const py = stBase ? v.getUint8(so+7) : 0;', 10
- db '      const border = stBase ? v.getUint8(so+8) : 0;', 10
- db '      const opacity = stBase ? v.getUint8(so+9) : 0;', 10
- db '      const shadow = stBase ? v.getUint8(so+10) : 0;', 10
- db '      const role = stBase ? v.getUint8(so+11) : 0;', 10
- db '      const pad = stBase ? v.getUint8(so+12) : 0;', 10
- db '      const mt = stBase ? v.getUint8(so+13) : 0;', 10
- db '      const mb = stBase ? v.getUint8(so+14) : 0;', 10
- db '      const hh = stBase ? v.getUint8(so+15) : 0;', 10
+ db '      const so = stBase + i*20;', 10
+ db '      const flags = stBase ? v.getUint32(so,true) : 0;', 10
+ db '      const weight = stBase ? v.getUint16(so+4,true) : 0;', 10
+ db '      const align = stBase ? v.getUint8(so+6) : 0;', 10
+ db '      const gap = stBase ? v.getUint8(so+7) : 0;', 10
+ db '      const radius = stBase ? v.getUint8(so+8) : 0;', 10
+ db '      const px = stBase ? v.getUint8(so+9) : 0;', 10
+ db '      const py = stBase ? v.getUint8(so+10) : 0;', 10
+ db '      const border = stBase ? v.getUint8(so+11) : 0;', 10
+ db '      const opacity = stBase ? v.getUint8(so+12) : 0;', 10
+ db '      const shadow = stBase ? v.getUint8(so+13) : 0;', 10
+ db '      const role = stBase ? v.getUint8(so+14) : 0;', 10
+ db '      const pad = stBase ? v.getUint8(so+15) : 0;', 10
+ db '      const mt = stBase ? v.getUint8(so+16) : 0;', 10
+ db '      const mb = stBase ? v.getUint8(so+17) : 0;', 10
+ db '      const hh = stBase ? v.getUint8(so+18) : 0;', 10
+ db '      const gcols = stBase ? v.getUint8(so+19) : 0;', 10
  db '      const bg = type === 0 && !(r === 0 && g === 0 && b === 0 && v.getUint8(o+15) === 0) ? "background:" + hex((r<<16)|(g<<8)|b) + ";" : "";', 10
  db '      const rad = radius === 255 ? "border-radius:9999px;" : (radius ? "border-radius:" + radius + "px;" : "");', 10
  db '      const bd = border ? "border:" + border + "px solid rgba(255,255,255,.2);" : "";', 10
@@ -144,16 +145,16 @@ section .data
  db '      const gapCss = gap ? "gap:" + gap + "px;" : "";', 10
  db '      const mg = (mt||mb) ? "margin:" + mt + "px 0 " + mb + "px;" : "";', 10
  db '      const flexDir = (flags & 1) ? ((flags & 2) ? "column" : "row") : "column";', 10
- db '      const items = (flags & 4) ? "center" : (flags & 8) ? "flex-end" : "flex-start";', 10
- db '      const just = (flags & 16) ? "center" : (flags & 32) ? "space-between" : (flags & 64) ? "flex-end" : "flex-start";', 10
+ db '      const items = (flags & 4) ? "center" : (flags & 8) ? "flex-end" : (flags & 524288) ? "stretch" : "flex-start";', 10
+ db '      const just = (flags & 16) ? "center" : (flags & 32) ? "space-between" : (flags & 64) ? "flex-end" : (flags & 131072) ? "space-around" : (flags & 262144) ? "space-evenly" : "flex-start";', 10
  db '      if (type === 1) {', 10
  db '        const fs = v.getUint8(o+24) || 13;', 10
  db '        const col = "color:" + hex((r<<16)|(g<<8)|b) + ";";', 10
  db '        const fw = weight ? "font-weight:" + weight + ";" : "";', 10
  db '        const ta = align === 1 ? "text-align:center;" : align === 2 ? "text-align:right;" : align === 3 ? "text-align:justify;" : "";', 10
- db '        const tt = (flags & 8192) ? "text-transform:uppercase;" : "";', 10
+ db '        const tt = (flags & 8192) ? "text-transform:uppercase;" : (flags & 1048576) ? "text-transform:lowercase;" : "";', 10
  db '        const it = (flags & 16384) ? "font-style:italic;" : "";', 10
- db '        const un = (flags & 32768) ? "text-decoration:underline;" : "";', 10
+ db '        const un = (flags & 32768) ? "text-decoration:underline;" : (flags & 2097152) ? "text-decoration:line-through;" : "";', 10
  db '        const css = "display:block;font-size:" + fs + "px;" + col + fw + ta + tt + it + un + "line-height:1.4;";', 10
  db '        if (el.style.cssText !== css) el.style.cssText = css;', 10
  db '        const tp = v.getUint32(o+16,true);', 10
@@ -171,7 +172,12 @@ section .data
  db '        // buttons (role 1) shrink to fit their label and', 10
  db '        // get a pointer cursor; plain views stretch 100%', 10
  db '        const ww = (w && w < 720) ? "width:" + w + "px;" : (role === 1 ? "width:auto;align-self:flex-start;cursor:pointer;" : "width:100%;");', 10
- db '        const css = "position:relative;display:flex;flex-direction:" + flexDir + ";align-items:" + items + ";justify-content:" + just + ";" + bg + padCss + gapCss + mg + rad + bd + op + sh + ww;', 10
+ db '        const hid = (flags & 128) ? "display:none;" : "";', 10
+ db '        const grd = (flags & 65536) ? "position:relative;display:grid;" + (gcols ? "grid-template-columns:repeat(" + gcols + ",1fr);" : "") : "";', 10
+ db '        const wrp = (flags & 256) ? "flex-wrap:wrap;" : "";', 10
+ db '        const grw = (flags & 512) ? "flex-grow:1;" : "";', 10
+ db '        const rest = bg + padCss + gapCss + mg + rad + bd + op + sh + ww;', 10
+ db '        const css = hid ? "display:none;" : (grd ? grd + rest : "position:relative;display:flex;flex-direction:" + flexDir + ";" + wrp + grw + "align-items:" + items + ";justify-content:" + just + ";" + rest);', 10
  db '        if (el.style.cssText !== css) el.style.cssText = css;', 10
  db '        if (hh) { if (el.style.minHeight !== hh + "px") el.style.minHeight = hh + "px"; }', 10
  db '      }', 10

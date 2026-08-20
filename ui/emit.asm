@@ -310,10 +310,11 @@ emit_wat_componente:
     add [str_cursor], rax
     ; ---- declarative states: strings + state_data ----
     call emit_states
-    ; ---- style records (16B each, after the string pool) ----
-    ; build style_buf: one 16-byte style record per widget record
-    ; (same order as the 32B blob records): flags u16, weight, align,
-    ; gap, radius, px, py, border, opacity, shadow, role, pad x5
+    ; ---- style records (20B each, after the string pool) ----
+    ; build style_buf: one 20-byte style record per widget record
+    ; (same order as the 32B blob records): flags u32, weight u16,
+    ; align, gap, radius, px, py, border, opacity, shadow, role, pad,
+    ; mt, mb, h, grid_cols
     call build_style_records
     ; styles data segment at STR_BASE + str_cursor
     mov rax, [str_cursor]
@@ -332,23 +333,23 @@ emit_wat_componente:
     lea rbx, [style_buf + r13]
     xor r14, r14
 .sbyte_inner:
-    cmp r14, 16
+    cmp r14, 20
     jge .sbyte_next
     movzx eax, byte [rbx + r14]
     call out_wat_byte_hex
     inc r14
     jmp .sbyte_inner
 .sbyte_next:
-    add r13, 16
+    add r13, 20
     jmp .sbytes
 .sbytes_done:
     lea rdi, [s_wat_d3]
     call out_wat_str
-    ; str_cursor += state_data + 16 * rec_count (dyn_parts already added)
+    ; str_cursor += state_data + 20 * rec_count (dyn_parts already added)
     mov eax, [state_data_len]
     add [str_cursor], rax
     mov eax, [rec_count]
-    imul eax, eax, 16
+    imul eax, eax, 20
     add [str_cursor], rax
     pop r15
     pop r14
@@ -357,17 +358,18 @@ emit_wat_componente:
     pop rbx
     ret
 
-; build_style_records - fills style_buf with one 16-byte style record per
-; widget record (same order as the 32B blob records): flags u16, weight,
-; align, gap, radius, px, py, border, opacity, shadow, role, pad x5.
-; Sets style_len = rec_count * 16. Called by emit_wat_componente AND by
-; the SSR pass (emit_shell) - the SSR HTML needs the same style data.
+; build_style_records - fills style_buf with one 20-byte style record per
+; widget record (same order as the 32B blob records): flags u32, weight
+; u16, align, gap, radius, px, py, border, opacity, shadow, role, pad,
+; mt, mb, h, grid_cols. Sets style_len = rec_count * 20. Called by
+; emit_wat_componente AND by the SSR pass (emit_shell) - the SSR HTML
+; needs the same style data.
 build_style_records:
     push rbx
     push r12
     push r13
     mov rax, [rec_count]
-    imul rax, rax, 16
+    imul rax, rax, 20
     mov [style_len], rax
     xor r13, r13
 .sloop:
@@ -379,36 +381,37 @@ build_style_records:
     mov ebx, [rcx + 4]           ; node idx
     imul rbx, rbx, NODE_SIZE
     lea rbx, [nodes + rbx]       ; node ptr
-    imul rax, r13, 16
+    imul rax, r13, 20
     lea rdi, [style_buf + rax]
-    ; zero the 16 bytes
-    mov ecx, 16
+    ; zero the 20 bytes
+    mov ecx, 20
     xor eax, eax
     rep stosb
-    imul rax, r13, 16
+    imul rax, r13, 20
     lea rdi, [style_buf + rax]
-    ; flags u16
-    movzx eax, word [rbx + N_FLAGS]
-    mov [rdi], ax
-    ; weight/align/gap/radius/px/py/border/opacity/shadow
-    movzx eax, byte [rbx + N_WEIGHT]
-    mov [rdi + 2], al
+    ; flags u32
+    mov eax, [rbx + N_FLAGS]
+    mov [rdi], eax
+    ; weight u16
+    movzx eax, word [rbx + N_WEIGHT]
+    mov [rdi + 4], ax
+    ; align/gap/radius/px/py/border/opacity/shadow
     movzx eax, byte [rbx + N_ALIGN]
-    mov [rdi + 3], al
-    movzx eax, byte [rbx + N_GAP]
-    mov [rdi + 4], al
-    movzx eax, byte [rbx + N_RADIUS]
-    mov [rdi + 5], al
-    movzx eax, byte [rbx + N_PX]
     mov [rdi + 6], al
-    movzx eax, byte [rbx + N_PY]
+    movzx eax, byte [rbx + N_GAP]
     mov [rdi + 7], al
-    movzx eax, byte [rbx + N_BORDER]
+    movzx eax, byte [rbx + N_RADIUS]
     mov [rdi + 8], al
-    movzx eax, byte [rbx + N_OPACITY]
+    movzx eax, byte [rbx + N_PX]
     mov [rdi + 9], al
-    movzx eax, byte [rbx + N_SHADOW]
+    movzx eax, byte [rbx + N_PY]
     mov [rdi + 10], al
+    movzx eax, byte [rbx + N_BORDER]
+    mov [rdi + 11], al
+    movzx eax, byte [rbx + N_OPACITY]
+    mov [rdi + 12], al
+    movzx eax, byte [rbx + N_SHADOW]
+    mov [rdi + 13], al
     ; role: kind 1 (button view) = 1 (recompute rec_order ptr - rep
     ; stosb clobbered rcx)
     imul rax, r13, 12
@@ -416,17 +419,19 @@ build_style_records:
     mov eax, [rcx]               ; kind
     cmp eax, 1
     jne .role0
-    mov byte [rdi + 11], 1
+    mov byte [rdi + 14], 1
 .role0:
-    ; pad (p-*), mt, mb, explicit height (h-*)
+    ; pad (p-*), mt, mb, explicit height (h-*), grid cols
     movzx eax, byte [rbx + N_PAD]
-    mov [rdi + 12], al
-    movzx eax, byte [rbx + N_MT]
-    mov [rdi + 13], al
-    movzx eax, byte [rbx + N_MB]
-    mov [rdi + 14], al
-    movzx eax, byte [rbx + N_H]
     mov [rdi + 15], al
+    movzx eax, byte [rbx + N_MT]
+    mov [rdi + 16], al
+    movzx eax, byte [rbx + N_MB]
+    mov [rdi + 17], al
+    movzx eax, byte [rbx + N_H]
+    mov [rdi + 18], al
+    movzx eax, byte [rbx + N_GRID_COLS]
+    mov [rdi + 19], al
     inc r13
     jmp .sloop
 .sloop_done:

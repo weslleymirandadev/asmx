@@ -107,7 +107,7 @@ emit_style_global:
 ; The old hardcoded 148512 collided once the pool grew past it (records
 ; in the pad region inherited stale style bytes -> checksum mismatch).
 ; The address is only known after the component wat is emitted (style_len
-; = rec_count * 16), so it is written here, right after the header, same
+; = rec_count * 20), so it is written here, right after the header, same
 ; as $style_base.
 ; ----------------------------------------------------------------------
 emit_widget_global:

@@ -81,8 +81,9 @@
 %define N_BORDER_COLOR 114           ; u32 0xRRGGBB (0xFFFFFFFF = default)
 %define N_PT         118             ; u32 padding-top (pt-*)
 %define N_PB         122             ; u32 padding-bottom (pb-*)
+%define N_GRID_COLS  126             ; u8 grid-template-columns count (grid-cols-N)
 
-; style flags (N_FLAGS bits)
+; style flags (N_FLAGS bits - u32 now)
 %define F_FLEX       1
 %define F_FLEXCOL    2
 %define F_ITEMSC     4
@@ -99,13 +100,24 @@
 %define F_UPPER      8192
 %define F_ITALIC     16384
 %define F_UNDER      32768
+%define F_GRID       65536
+%define F_JUSTA      131072          ; justify-around
+%define F_JUSTV      262144          ; justify-evenly
+%define F_ITEMST     524288          ; items-stretch
+%define F_LOWER      1048576         ; lowercase
+%define F_LINE       2097152         ; line-through (distinct from underline)
 
 ; rec_order entry: 12 bytes (kind u32, node u32, parent_rec u32)
 ;   kind 0 = node record (tag), kind 1 = button view, kind 2 = button label
-; style record (16 bytes, emitted as a data segment + exported as styles()):
-;   +0 flags u16 | +2 weight u8 | +3 align u8 | +4 gap u8 | +5 radius u8
-;   +6 px u8 | +7 py u8 | +8 border u8 | +9 opacity u8 | +10 shadow u8
-;   +11 role u8 (0 normal, 1 button) | +12..15 pad
+; style record (20 bytes, emitted as a data segment + exported as styles()):
+;   +0 flags u32 | +4 weight u16 | +6 align u8 | +7 gap u8 | +8 radius u8
+;   +9 px u8 | +10 py u8 | +11 border u8 | +12 opacity u8 | +13 shadow u8
+;   +14 role u8 (0 normal, 1 button) | +15 pad u8 | +16 mt u8 | +17 mb u8
+;   +18 h u8 | +19 grid_cols u8
+; NOTE: 20B record (was 16B) - weight became u16 (font-black=900 no longer
+; truncates to 32) and flags grew to u32 (grid/justify-around/evenly/
+; items-stretch/lowercase/line-through). ssr.asm + glue.asm + emit.asm
+; must ALL agree on these offsets.
 
 ; ----------------------------------------------------------------------
 ; declarative state (ui/state.asm): types, states, interpolations, actions
