@@ -58,13 +58,30 @@
       i32.const 32
       i32.ge_u
       br_if $rb_end
-      ;; skip the text_ptr field (record bytes 16..19)
+      ;; skip the text_ptr field (record bytes 16..19) and the attr_ptr
+      ;; field (bytes 26..29) - both are offsets in the build-time blob
+      ;; but absolute addresses in the wasm
       local.get $j
       i32.const 16
       i32.ge_u
       if
         local.get $j
         i32.const 20
+        i32.lt_u
+        if
+          local.get $j
+          i32.const 1
+          i32.add
+          local.set $j
+          br $rb
+        end
+      end
+      local.get $j
+      i32.const 26
+      i32.ge_u
+      if
+        local.get $j
+        i32.const 30
         i32.lt_u
         if
           local.get $j
