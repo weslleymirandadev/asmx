@@ -52,10 +52,13 @@ $(UI_CP): $(UI_CP_SRC) | $(BUILD)
 	$(AS) -f elf64 -I $(PKG) -o $(BUILD)/tools/ui-compile.o $<
 	$(LD) -o $@ $(BUILD)/tools/ui-compile.o
 
-# index.wasm: framework lib + the page's component wats + _main
+# index.wasm: framework lib + the page's component wats + _main.
+# NOTE: use the SHELL glob (*.wat) not $(wildcard ...) - GNU Make expands
+# $(wildcard) in a recipe at parse time (before the deps run), so a clean
+# CI build would see an empty list. Shell globs run at execution time.
 $(BUILD)/static/index.wasm: $(BUILD)/app/page.s $(wildcard $(BUILD)/app/page.s.d/*.wat) $(UI_LIB) | $(BUILD)
 	@mkdir -p $(dir $@)
-	{ echo "(module"; cat $(UI_LIB) $(wildcard $(BUILD)/app/page.s.d/*.wat); echo ")"; } | $(WAT2WASM) - -o $@
+	{ echo "(module"; cat $(UI_LIB) $(BUILD)/app/page.s.d/*.wat; echo ")"; } | $(WAT2WASM) - -o $@
 
 $(BUILD):
 	mkdir -p $(BUILD)
