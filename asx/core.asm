@@ -27,9 +27,11 @@ extern server_fd, client_fd, asx_handler
 extern buffer, route, resp_status
 extern asx_ssr_state_reset
 extern log_banner, log_bind_retry, log_bind_giveup, log_request, clock_start
+extern req_count
 
 section .bss
     sig_action resq 4     ; struct sigaction: sa_handler, sa_flags, sa_restorer, sa_mask
+    is_child   resq 1     ; 1 = fork child (processes ONE request then exits)
 
 section .data
     rcv_timeout dq 0, 300000  ; struct timeval { tv_sec = 0, tv_usec = 300ms }
@@ -93,6 +95,22 @@ asx_listen:
     mov rax, SYS_rt_sigaction
     syscall
 
+    ; Ignore SIGCHLD (17): fork-per-connection children that finished
+    ; are reaped by the kernel automatically (SIG_IGN on SIGCHLD) - no
+    ; zombies, no waitpid in the accept loop. Only the child that is
+    ; still processing a request lingers, and it closes server_fd at
+    ; fork time so the port never stays bound after the parent dies.
+    mov qword [sig_action + 0], 1     ; sa_handler = SIG_IGN
+    mov qword [sig_action + 8], 0     ; sa_flags
+    mov qword [sig_action + 16], 0    ; sa_restorer
+    mov qword [sig_action + 24], 0    ; sa_mask
+    lea rsi, [sig_action]
+    xor rdx, rdx                      ; oldact = NULL
+    mov r10, 8                        ; sigsetsize
+    mov rdi, 17                       ; SIGCHLD
+    mov rax, SYS_rt_sigaction
+    syscall
+
 .listen_loop:
     mov rdi, r12                  ; current port (socket_bind_listen consumes rdi)
     call socket_bind_listen       ; rax = server_fd or -1 (port in use)
@@ -130,11 +148,26 @@ asx_listen:
 ; ----------------------------------------------------------------------
 ; requests - accept loop (exported so user handlers can `jmp requests`)
 ; ----------------------------------------------------------------------
+; Concurrency model: fork-per-connection. The parent accepts and forks;
+; the CHILD processes exactly ONE request (parse -> dispatch -> handler)
+; and _exits (never accepts). The parent closes its copy of the client
+; fd and goes back to accepting immediately - a slow request (upload,
+; large static, SSE) can no longer block the queue. No locks, no shared
+; state: the fork copies memory (COW), so buffer/route/resp_buf are
+; per-connection by construction. SIGCHLD=SIG_IGN (set in asx_listen)
+; makes the kernel reap finished children - no zombies, no waitpid.
+; ----------------------------------------------------------------------
 global requests
 requests:
-    ; Log the request that just finished (if any) and timestamp this one
+    ; Fork child? the request it processed just finished: log + exit.
+    ; (The parent never reaches this branch: it has is_child = 0.)
+    cmp qword [is_child], 1
+    jne .parent
     call log_request
-
+    mov rax, SYS_exit
+    xor rdi, rdi
+    syscall
+.parent:
     ; Close previous client if any (fd > 2)
     cmp qword [client_fd], 2
     jle .accept
@@ -153,15 +186,33 @@ requests:
 
     ; SO_RCVTIMEO on the client socket: a client that connects and never
     ; sends (browser preconnect, stale connection) would block the
-    ; single-threaded accept loop forever - the next refresh would hang
-    ; in the backlog and time out. With a receive timeout the read fails
-    ; with EAGAIN after 5s and we close that client + accept again.
+    ; child for 5s and the parent would fork endlessly for the same
+    ; backlog item. With a receive timeout the read fails with EAGAIN
+    ; after 5s and that child closes + exits.
     mov rdi, [client_fd]
     mov rax, SYS_setsockopt
     mov rsi, 1        ; SOL_SOCKET
     mov rdx, 20       ; SO_RCVTIMEO
     lea r10, [rcv_timeout]
     mov r8, 16        ; sizeof(struct timeval)
+    syscall
+
+    ; fork: the child owns this connection, the parent keeps accepting
+    mov rax, SYS_fork
+    syscall
+    test rax, rax
+    jnz .parent_fork
+
+    ; ================= child: process ONE request =================
+    mov qword [is_child], 1
+    ; the log's "first request" guard uses req_count, inherited as 0
+    ; from the parent (which never processes) - force it so every
+    ; child's request is logged
+    mov qword [req_count], 1
+    ; close the listening socket: a slow child must not keep the port
+    ; bound after the parent dies (hot reload rebinds immediately)
+    mov rax, SYS_close
+    mov rdi, [server_fd]
     syscall
 
     ; Read the request
@@ -211,15 +262,29 @@ requests:
     mov qword [resp_status], 200
     call asx_ssr_state_reset
 
-    ; Dispatch to the user handler (never returns - handler jmps to requests)
+    ; Dispatch to the user handler (never returns in-process - the
+    ; handler responds and `jmp requests`, where the is_child branch
+    ; logs + exits)
     mov rax, [asx_handler]
     jmp rax
 
-.read_close:
-    ; Idle client (EAGAIN from SO_RCVTIMEO) or read error: close the
-    ; socket and go back to accepting - never die, never block the loop.
+.parent_fork:
+    ; ================= parent: back to accepting =================
+    ; close our copy of the client fd (the child inherited it); the
+    ; accept of the next connection overwrites client_fd anyway
     mov rax, SYS_close
     mov rdi, [client_fd]
     syscall
     mov qword [client_fd], -1
     jmp .accept
+
+.read_close:
+    ; Idle client (EAGAIN from SO_RCVTIMEO) or read error: close the
+    ; socket and exit (a child never loops back to accept).
+    mov rax, SYS_close
+    mov rdi, [client_fd]
+    syscall
+    mov qword [client_fd], -1
+    mov rax, SYS_exit
+    xor rdi, rdi
+    syscall
