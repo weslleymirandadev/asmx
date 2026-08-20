@@ -105,9 +105,12 @@ function parseHtml(src) {
   root.attrs["data-asx-checksum"] = (src.match(/data-asx-checksum="([^"]*)"/) || [])[1] || "";
   root.attrs["data-modules"] = (src.match(/data-modules="([^"]*)"/) || [])[1] || "/index.wasm";
   const stack = [root];
-  const tagRe = /<\/(div|span|button)\s*>|<(div|span|button)([^>]*)>/g;
+  // real html tags now (main/p/a/nav/button/...) - parse any tag except
+  // script/style (handled separately; they are not widgets)
+  const tagRe = /<\/(script|style|[a-z][a-z0-9]*)\s*>|<(script|style|[a-z][a-z0-9]*)([^>]*)>/g;
   let m;
   while ((m = tagRe.exec(src))) {
+    if (m[1] === "script" || m[1] === "style" || m[2] === "script" || m[2] === "style") continue;
     if (m[1]) { stack.pop(); continue; }       // closing tag
     const tag = m[2], attrs = m[3] || "";
     const el = new FakeEl(tag);
