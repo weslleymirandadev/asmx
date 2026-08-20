@@ -3,34 +3,194 @@
 ; =============================================================================
 
 ; --- tag table (dq ptr, dq id) ---
+; id is the REAL HTML tag id (1..N), NOT the view/label/button kind.
+; kind per id lives in tag_kind (0=view 1=label 2=button), void in
+; tag_void (1 = no closing tag), name in tag_names (for SSR/glue).
+; The glue.js TAG_NAMES array MUST stay in sync with these ids.
 s_main        db "main", 0
 s_div         db "div", 0
 s_section     db "section", 0
 s_nav         db "nav", 0
 s_header      db "header", 0
 s_footer      db "footer", 0
+s_article     db "article", 0
+s_aside       db "aside", 0
+s_figure      db "figure", 0
+s_blockquote  db "blockquote", 0
+s_ul          db "ul", 0
+s_ol          db "ol", 0
+s_li          db "li", 0
+s_form        db "form", 0
+s_table       db "table", 0
+s_thead       db "thead", 0
+s_tbody       db "tbody", 0
+s_tfoot       db "tfoot", 0
+s_tr          db "tr", 0
+s_td          db "td", 0
+s_th          db "th", 0
+s_details     db "details", 0
+s_dialog      db "dialog", 0
+s_video       db "video", 0
+s_audio       db "audio", 0
+s_picture     db "picture", 0
+s_iframe      db "iframe", 0
+s_canvas      db "canvas", 0
+s_select      db "select", 0
+s_textarea    db "textarea", 0
+s_fieldset    db "fieldset", 0
+s_dl          db "dl", 0
+s_dt          db "dt", 0
+s_dd          db "dd", 0
+s_menu        db "menu", 0
+s_hgroup      db "hgroup", 0
 s_h1          db "h1", 0
 s_h2          db "h2", 0
 s_h3          db "h3", 0
+s_h4          db "h4", 0
+s_h5          db "h5", 0
+s_h6          db "h6", 0
 s_p_tag       db "p", 0
 s_span        db "span", 0
 s_a           db "a", 0
+s_label       db "label", 0
+s_strong      db "strong", 0
+s_em          db "em", 0
+s_code        db "code", 0
+s_pre         db "pre", 0
+s_small       db "small", 0
+s_b           db "b", 0
+s_i           db "i", 0
+s_u           db "u", 0
+s_mark        db "mark", 0
+s_time        db "time", 0
+s_cite        db "cite", 0
+s_q           db "q", 0
+s_abbr        db "abbr", 0
+s_sub         db "sub", 0
+s_sup         db "sup", 0
+s_kbd         db "kbd", 0
+s_samp        db "samp", 0
+s_var         db "var", 0
+s_del         db "del", 0
+s_ins         db "ins", 0
+s_s           db "s", 0
+s_option      db "option", 0
+s_figcaption  db "figcaption", 0
+s_legend      db "legend", 0
+s_caption     db "caption", 0
+s_summary     db "summary", 0
 s_button      db "button", 0
+s_img         db "img", 0
+s_input       db "input", 0
+s_br          db "br", 0
+s_hr          db "hr", 0
+s_source      db "source", 0
+s_meta        db "meta", 0
+s_link        db "link", 0
+s_area        db "area", 0
+s_base        db "base", 0
+s_col         db "col", 0
+s_embed       db "embed", 0
+s_track       db "track", 0
+s_wbr         db "wbr", 0
 
-tags:         dq s_main, 0
-              dq s_div, 0
-              dq s_section, 0
-              dq s_nav, 0
-              dq s_header, 0
-              dq s_footer, 0
-              dq s_h1, 1
-              dq s_h2, 1
-              dq s_h3, 1
-              dq s_p_tag, 1
-              dq s_span, 1
-              dq s_a, 1
-              dq s_button, 2
+tags:         dq s_main, 1
+              dq s_div, 2
+              dq s_section, 3
+              dq s_nav, 4
+              dq s_header, 5
+              dq s_footer, 6
+              dq s_article, 7
+              dq s_aside, 8
+              dq s_figure, 9
+              dq s_blockquote, 10
+              dq s_ul, 11
+              dq s_ol, 12
+              dq s_li, 13
+              dq s_form, 14
+              dq s_table, 15
+              dq s_thead, 16
+              dq s_tbody, 17
+              dq s_tfoot, 18
+              dq s_tr, 19
+              dq s_td, 20
+              dq s_th, 21
+              dq s_details, 22
+              dq s_dialog, 23
+              dq s_video, 24
+              dq s_audio, 25
+              dq s_picture, 26
+              dq s_iframe, 27
+              dq s_canvas, 28
+              dq s_select, 29
+              dq s_textarea, 30
+              dq s_fieldset, 31
+              dq s_dl, 32
+              dq s_dt, 33
+              dq s_dd, 34
+              dq s_menu, 35
+              dq s_hgroup, 36
+              dq s_h1, 37
+              dq s_h2, 38
+              dq s_h3, 39
+              dq s_h4, 40
+              dq s_h5, 41
+              dq s_h6, 42
+              dq s_p_tag, 43
+              dq s_span, 44
+              dq s_a, 45
+              dq s_label, 46
+              dq s_strong, 47
+              dq s_em, 48
+              dq s_code, 49
+              dq s_pre, 50
+              dq s_small, 51
+              dq s_b, 52
+              dq s_i, 53
+              dq s_u, 54
+              dq s_mark, 55
+              dq s_time, 56
+              dq s_cite, 57
+              dq s_q, 58
+              dq s_abbr, 59
+              dq s_sub, 60
+              dq s_sup, 61
+              dq s_kbd, 62
+              dq s_samp, 63
+              dq s_var, 64
+              dq s_del, 65
+              dq s_ins, 66
+              dq s_s, 67
+              dq s_option, 68
+              dq s_figcaption, 69
+              dq s_legend, 70
+              dq s_caption, 71
+              dq s_summary, 72
+              dq s_button, 73
+              dq s_img, 74
+              dq s_input, 75
+              dq s_br, 76
+              dq s_hr, 77
+              dq s_source, 78
+              dq s_meta, 79
+              dq s_link, 80
+              dq s_area, 81
+              dq s_base, 82
+              dq s_col, 83
+              dq s_embed, 84
+              dq s_track, 85
+              dq s_wbr, 86
 tags_end:
+
+; tag_kind[id] - 0=view 1=label 2=button (id 0 unused)
+tag_kind:     db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, 1,2,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+; tag_void[id] - 1 = void element (no closing tag; img/br/hr/input/...)
+tag_void:     db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,1,1,1,1,1,1,1,1,1,1,1,1,1
+
+; tag_names[id] - the tag name string per id (id 0 unused) - SSR emits
+; the real tag from this; glue.js carries a parallel JS array
+tag_names:    dq 0, s_main, s_div, s_section, s_nav, s_header, s_footer, s_article, s_aside, s_figure, s_blockquote, s_ul, s_ol, s_li, s_form, s_table, s_thead, s_tbody, s_tfoot, s_tr, s_td, s_th, s_details, s_dialog, s_video, s_audio, s_picture, s_iframe, s_canvas, s_select, s_textarea, s_fieldset, s_dl, s_dt, s_dd, s_menu, s_hgroup, s_h1, s_h2, s_h3, s_h4, s_h5, s_h6, s_p_tag, s_span, s_a, s_label, s_strong, s_em, s_code, s_pre, s_small, s_b, s_i, s_u, s_mark, s_time, s_cite, s_q, s_abbr, s_sub, s_sup, s_kbd, s_samp, s_var, s_del, s_ins, s_s, s_option, s_figcaption, s_legend, s_caption, s_summary, s_button, s_img, s_input, s_br, s_hr, s_source, s_meta, s_link, s_area, s_base, s_col, s_embed, s_track, s_wbr
 
 ; ----------------------------------------------------------------------
 ; TAILWIND TABLES (default v3 palette - ALL keys)
@@ -732,6 +892,51 @@ tw_flags:
     dq s_bold, F_BOLD
     dq s_semibold, F_BOLD
 tw_flags_end:
+
+; responsive/hover variant prefixes (parse.asm variant_bp): literal ptr,
+; literal len, bp id. bp 0 = hover, 1..6 = min-width breakpoints.
+s_v_hover db "hover", 0
+s_v_xs    db "xs", 0
+s_v_sm    db "sm", 0
+s_v_md    db "md", 0
+s_v_lg    db "lg", 0
+s_v_xl    db "xl", 0
+s_v_2xl   db "2xl", 0
+
+var_prefixes:
+    dq s_v_hover, 5, 0
+    dq s_v_xs, 2, 1
+    dq s_v_sm, 2, 2
+    dq s_v_md, 2, 3
+    dq s_v_lg, 2, 4
+    dq s_v_xl, 2, 5
+    dq s_v_2xl, 3, 6
+var_prefixes_end:
+
+; style fields diffed for variants: (node offset u32, size u32)
+var_fields:
+    dd N_FLAGS, 4
+    dd N_BG, 4
+    dd N_COLOR, 4
+    dd N_FS, 4
+    dd N_PAD, 4
+    dd N_MT, 4
+    dd N_MB, 4
+    dd N_W, 4
+    dd N_GAP, 4
+    dd N_RADIUS, 4
+    dd N_PX, 4
+    dd N_PY, 4
+    dd N_H, 4
+    dd N_WEIGHT, 4
+    dd N_ALIGN, 4
+    dd N_BORDER, 4
+    dd N_OPACITY, 4
+    dd N_SHADOW, 4
+    dd N_PT, 4
+    dd N_PB, 4
+    dd N_GRID_COLS, 1
+var_fields_end:
 
 ; grid-cols-N -> column count (1..12); needs F_GRID to take effect
 s_grid_cols db "grid-cols-", 0
