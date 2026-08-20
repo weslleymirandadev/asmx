@@ -446,7 +446,8 @@ ssr_css_view:
     lea rdi, [s_css_grow]
     call out_str
 .no_grow:
-    ; align-items
+    ; align-items: default stretch (CSS canonical - equalizes sibling
+    ; heights in a row, e.g. cards); items-start is the explicit flex-start
     lea rdi, [s_css_items]
     call out_str
     mov eax, [r13]
@@ -456,7 +457,9 @@ ssr_css_view:
     jnz .items_e
     test eax, F_ITEMST
     jnz .items_s
-    lea rdi, [s_css_fs]
+    test eax, F_ITEMSS
+    jnz .items_start
+    lea rdi, [s_css_stretch]
     jmp .items_done
 .items_c:
     lea rdi, [s_css_center]
@@ -466,6 +469,9 @@ ssr_css_view:
     jmp .items_done
 .items_s:
     lea rdi, [s_css_stretch]
+    jmp .items_done
+.items_start:
+    lea rdi, [s_css_fs]
 .items_done:
     call out_str
     ; justify-content

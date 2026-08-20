@@ -145,7 +145,7 @@ section .data
  db '      const gapCss = gap ? "gap:" + gap + "px;" : "";', 10
  db '      const mg = (mt||mb) ? "margin:" + mt + "px 0 " + mb + "px;" : "";', 10
  db '      const flexDir = (flags & 1) ? ((flags & 2) ? "column" : "row") : "column";', 10
- db '      const items = (flags & 4) ? "center" : (flags & 8) ? "flex-end" : (flags & 524288) ? "stretch" : "flex-start";', 10
+ db '      const items = (flags & 4) ? "center" : (flags & 8) ? "flex-end" : (flags & 4194304) ? "flex-start" : "stretch";', 10
  db '      const just = (flags & 16) ? "center" : (flags & 32) ? "space-between" : (flags & 64) ? "flex-end" : (flags & 131072) ? "space-around" : (flags & 262144) ? "space-evenly" : "flex-start";', 10
  db '      if (type === 1) {', 10
  db '        const fs = v.getUint8(o+24) || 13;', 10

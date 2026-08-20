@@ -712,7 +712,7 @@ tw_flags:
     dq s_flex_wrap, F_FLEX | F_WRAP
     dq s_flex_1, F_GROW
     dq s_grid, F_GRID
-    dq s_items_start, 0
+    dq s_items_start, F_ITEMSS
     dq s_items_center, F_ITEMSC
     dq s_items_end, F_ITEMSE
     dq s_items_stretch, F_ITEMST

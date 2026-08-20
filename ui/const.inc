@@ -106,6 +106,7 @@
 %define F_ITEMST     524288          ; items-stretch
 %define F_LOWER      1048576         ; lowercase
 %define F_LINE       2097152         ; line-through (distinct from underline)
+%define F_ITEMSS     4194304         ; items-start (explicit flex-start)
 
 ; rec_order entry: 12 bytes (kind u32, node u32, parent_rec u32)
 ;   kind 0 = node record (tag), kind 1 = button view, kind 2 = button label
