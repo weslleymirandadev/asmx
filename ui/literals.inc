@@ -159,7 +159,7 @@ s_main_t4     db ")", 10
 s_dot_d       db ".d/", 0
 s_dot_d_dir   db ".d", 0
 s_dot_wat     db ".wat", 0
-s_wat_q       db '\\"', 0
+s_wat_q       db '\"', 0
 s_main_wat    db "_main.wat", 0
 s_style_g1    db 10, "(global $style_base i32 (i32.const ", 0
 s_style_g2    db "))", 10, 0
@@ -254,8 +254,17 @@ s_ssr_mod1  db '" data-modules="/', 0
 s_ssr_sufi  db '.wasm">', 0
 s_ssr_sufp  db '/page.wasm">', 0
 s_ssr_close db '</div>', 0
+; dynamic tag open/close: '<' + tag_name + ' data-asx-id="' + id +
+; [role] + [attrs] + ' style="' + css + '">' | '</' + tag_name + '>'
+s_ssr_lt     db '<', 0
+s_ssr_ida    db ' data-asx-id="', 0
+s_ssr_idc    db '"', 0
+s_ssr_role   db ' data-asx-role="button"', 0
+s_ssr_sty    db ' style="', 0
+s_ssr_gt     db '">', 0
+s_ssr_close2 db '</', 0
+s_ssr_close3 db '>', 0
 s_ssr_snap1 db '<script type="application/asx-state">{"root":"', 0
-; emits: ', 34, 4, '}</script> -> the page.s line becomes
 ;   db '...{"root":"<ui>', 34, 4, '}</script>'
 ; so the final bytes are: " 0x04 }</script> (the server injects the
 ; ,"key":value pairs at the 0x04 injection point; the " (34) closes
@@ -271,12 +280,41 @@ s_ssr_slot3 db "', 3, '", 0
 ; has the reset + theme (no layout flicker when the glue boots later);
 ; the glue skips injecting its own copy when this tag is present
 s_ssr_sty1  db '<style data-asx-base>*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;font-family:ui-sans-serif,system-ui,sans-serif;padding:48px 24px;background:#', 0
+
+; responsive/hover variants (emit.asm emit_variants)
+s_var_open  db '<style data-asx-variants>', 0
+s_var_hov1  db '[data-asx-id="', 0
+s_var_hov2  db '"]:hover{', 0
+s_var_mq1   db '@media(min-width:', 0
+s_var_mq2   db 'px){[data-asx-id="', 0
+s_var_mq3   db '"]{', 0
+s_var_end   db '!important}', 0
+s_var_close db '</style>', 0
+s_var_bg    db 'background:#', 0
+s_var_tcol  db 'color:#', 0
+s_var_fs    db 'font-size:', 0
+s_var_px    db 'px;', 0
+s_var_pad   db 'padding:', 0
+s_var_mt    db 'margin-top:', 0
+s_var_mb    db 'margin-bottom:', 0
+s_var_w     db 'width:', 0
+s_var_gap   db 'gap:', 0
+s_var_rad   db 'border-radius:', 0
+s_var_rad_full db 'border-radius:9999px;', 0
+s_var_fw    db 'font-weight:', 0
+s_var_ta_c  db 'text-align:center;', 0
+s_var_ta_r  db 'text-align:right;', 0
+s_var_ta_j  db 'text-align:justify;', 0
+s_var_op    db 'opacity:0.', 0
+s_var_gcols db 'grid-template-columns:repeat(', 0
+s_var_gcols2 db ',1fr);', 0
+s_var_hidden db 'display:none;', 0
+s_var_grid  db 'display:grid;', 0
+s_var_flex  db 'display:flex;flex-direction:', 0
+s_var_col   db 'column', 0
+s_var_row   db 'row', 0
 s_ssr_sty2  db ';color:#', 0
 s_ssr_sty3  db '}</style>', 0
-s_ssr_id1   db '<div data-asx-id="', 0
-s_ssr_role  db '" data-asx-role="button', 0
-s_ssr_sty   db '" style="', 0
-s_ssr_gt    db '">', 0
 s_ssr_span1 db '<span data-asx-id="', 0
 s_ssr_span2 db '</span>', 0
 s_ssr_cv1   db '<canvas data-asx-id="', 0
@@ -362,3 +400,9 @@ s_set_h3 db 10, '  i32.add', 10, '  local.get $v', 10, '  i32.store)', 10, 0
 ; may override it, so it must not be part of the canonical IR hash)
 s_dyn_f1 db 10, '  global.get $widget_base', 10, '  i32.const ', 0
 s_dyn_f2 db 10, '  i32.add', 10, '  i32.const 1', 10, '  i32.store8', 10, 0
+; real HTML tag id in the wasm record (byte 1): i32.store8 tag_id
+s_tag_f2 db 10, '  i32.add', 10, '  i32.const ', 0
+s_tag_f3 db 10, '  i32.store8', 10, 0
+; attr_ptr in the wasm record (bytes 26..29): i32.store ABSOLUTE address
+s_attr_f2 db 10, '  i32.add', 10, '  i32.const ', 0
+s_attr_f3 db 10, '  i32.store', 10, 0
