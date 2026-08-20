@@ -43,6 +43,10 @@ ssr_hash:
     jb .rb_hash
     cmp r14, 20
     jb .rb_skip                ; skip text_ptr (offset vs wasm address)
+    cmp r14, 26
+    jb .rb_hash
+    cmp r14, 30
+    jb .rb_skip                ; skip attr_ptr (offset vs wasm address)
 .rb_hash:
     movzx edx, byte [rbx + r14]
     mov eax, r12d
@@ -126,8 +130,8 @@ ssr_emit_children:
     mov r14, [ssr_stack + rax*8]
     cmp r14, r13
     je .closed
-    lea rdi, [s_ssr_close]
-    call out_str
+    mov rdi, r14
+    call ssr_tag_close          ; '</tag>' (real html tag)
     call ssr_nl
     dec qword [ssr_top]
     jmp .close_loop
@@ -140,8 +144,10 @@ ssr_emit_children:
 .cl_all:
     cmp qword [ssr_top], 0
     je .have_parent
-    lea rdi, [s_ssr_close]
-    call out_str
+    mov rax, [ssr_top]
+    dec rax
+    mov rdi, [ssr_stack + rax*8]
+    call ssr_tag_close
     call ssr_nl
     dec qword [ssr_top]
     jmp .cl_all
@@ -160,8 +166,10 @@ ssr_emit_children:
 .cl_last:
     cmp qword [ssr_top], 0
     je .fin
-    lea rdi, [s_ssr_close]
-    call out_str
+    mov rax, [ssr_top]
+    dec rax
+    mov rdi, [ssr_stack + rax*8]
+    call ssr_tag_close
     call ssr_nl
     dec qword [ssr_top]
     jmp .cl_last
@@ -175,7 +183,8 @@ ssr_emit_children:
 
 ; ----------------------------------------------------------------------
 ; ssr_open_node(rdi = rec idx) -> rax = 1 if a container (push to stack),
-; 0 if self-contained (label/canvas). Emits the opening tag line.
+; 0 if self-contained (label/canvas). Emits the opening tag line with the
+; REAL html tag (record byte 1 -> tag_names) + its attributes.
 ; ----------------------------------------------------------------------
 ssr_open_node:
     push rbx
@@ -189,20 +198,9 @@ ssr_open_node:
     je .label
     cmp eax, 2
     je .canvas
-    ; ---- view (div) ----
-    lea rdi, [s_ssr_id1]       ; '<div data-asx-id="'
-    call out_str
-    mov rdi, r12
-    call ssr_dec
-    ; role (button view)? style record +11 == 1
-    imul rax, r12, 16
-    lea r13, [style_buf + rax]
-    cmp byte [r13 + 11], 1
-    jne .no_role
-    lea rdi, [s_ssr_role]
-    call out_str
-.no_role:
-    lea rdi, [s_ssr_sty]       ; '" style="'
+    ; ---- view ----
+    call ssr_tag_open           ; '<tag data-asx-id="N"[role][attrs]'
+    lea rdi, [s_ssr_sty]       ; ' style="'
     call out_str
     mov rdi, r12
     call ssr_css_view
@@ -212,11 +210,8 @@ ssr_open_node:
     mov rax, 1
     jmp .done
 .label:
-    ; ---- label (span) ----
-    lea rdi, [s_ssr_span1]     ; '<span data-asx-id="'
-    call out_str
-    mov rdi, r12
-    call ssr_dec
+    ; ---- label ----
+    call ssr_tag_open
     lea rdi, [s_ssr_sty]
     call out_str
     mov rdi, r12
@@ -342,8 +337,8 @@ ssr_open_node:
     sub rsi, rdi
     call ssr_esc_text
 .no_txt:
-    lea rdi, [s_ssr_span2]     ; '</span>'
-    call out_str
+    mov rdi, r12
+    call ssr_tag_close          ; '</tag>'
     call ssr_nl
     xor rax, rax
     jmp .done
@@ -371,6 +366,82 @@ ssr_open_node:
     xor rax, rax
 .done:
     pop r13
+    pop r12
+    pop rbx
+    ret
+
+; ----------------------------------------------------------------------
+; ssr_tag_open - emits the dynamic tag open prefix for the record in
+; rbx: '<tag data-asx-id="N"' + [role] + [attrs] (no style yet; the
+; caller emits ' style="' + css + '">'). r12 = rec idx, rbx = 32B record.
+; void elements (img/br/hr/input/...) are emitted by the CALLER with no
+; closing tag - ssr_open_node returns 0 for them (no stack push).
+; ----------------------------------------------------------------------
+ssr_tag_open:
+    push rbx
+    push r12
+    push r13
+    push r14
+    ; '<'
+    lea rdi, [s_ssr_lt]
+    call out_str
+    ; tag name from tag_names[id]
+    movzx eax, byte [rbx + 1]   ; tag id (record byte 1)
+    mov rax, [tag_names + rax*8]
+    mov rdi, rax
+    call out_str
+    ; ' data-asx-id="'
+    lea rdi, [s_ssr_ida]
+    call out_str
+    mov rdi, r12
+    call ssr_dec
+    ; '"'
+    lea rdi, [s_ssr_idc]
+    call out_str
+    ; role (button view)? style record +14 == 1 (20B records!)
+    imul rax, r12, 20
+    lea r13, [style_buf + rax]
+    cmp byte [r13 + 14], 1
+    jne .to_no_role
+    lea rdi, [s_ssr_role]
+    call out_str
+.to_no_role:
+    ; attributes: 'name="value"' string in the pool (record bytes
+    ; 26..29 = blob-relative offset; 0 = none). A leading space
+    ; separates them from the id/role attributes.
+    mov eax, [rbx + 26]
+    test eax, eax
+    jz .to_no_attr
+    mov r14d, eax               ; attr offset (out_byte clobbers rax)
+    mov al, ' '
+    call out_byte
+    lea rdi, [blob_buf + r14]
+    call out_str
+.to_no_attr:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; ----------------------------------------------------------------------
+; ssr_tag_close(rdi = rec idx) - emits '</tag>' with the record's real
+; html tag name (record byte 1 -> tag_names).
+; ----------------------------------------------------------------------
+ssr_tag_close:
+    push rbx
+    push r12
+    mov r12, rdi
+    imul rax, r12, 32
+    lea rbx, [blob_buf + rax + 24]
+    lea rdi, [s_ssr_close2]     ; '</'
+    call out_str
+    movzx eax, byte [rbx + 1]   ; tag id
+    mov rax, [tag_names + rax*8]
+    mov rdi, rax
+    call out_str
+    lea rdi, [s_ssr_close3]     ; '>'
+    call out_str
     pop r12
     pop rbx
     ret
@@ -772,6 +843,25 @@ ssr_css_label:
     lea rdi, [s_css_ln]
     call out_str
 .no_ln:
+    ; margin: (mt||mb) - labels honor mt-*/mb-* like views do
+    movzx eax, byte [r13 + 16]   ; mt
+    movzx ecx, byte [r13 + 17]   ; mb
+    test eax, eax
+    jnz .have_mgl
+    test ecx, ecx
+    jz .no_mgl
+.have_mgl:
+    lea rdi, [s_css_mg]
+    call out_str
+    movzx edi, byte [r13 + 16]
+    call ssr_dec
+    lea rdi, [s_css_px0]
+    call out_str
+    movzx edi, byte [r13 + 17]
+    call ssr_dec
+    lea rdi, [s_css_px_semi]
+    call out_str
+.no_mgl:
     lea rdi, [s_css_lh]          ; "line-height:1.4;"
     call out_str
     pop r13
