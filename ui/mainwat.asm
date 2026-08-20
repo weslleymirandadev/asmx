@@ -119,6 +119,17 @@ emit_widget_global:
     call itoa_main
     lea rdi, [s_style_g2]
     call out_main_str
+    ; $resp_base: the RPC response buffer lives AFTER the widget records
+    ; (widget_cap 64 * 32B = 2048). resp_area()/resp_len exports in
+    ; draw.wat read it; the glue writes the fetch response there.
+    lea rdi, [s_resp_g1]
+    call out_main_str
+    mov rdi, [style_addr]
+    add rdi, [style_len]
+    add rdi, 2048
+    call itoa_main
+    lea rdi, [s_style_g2]
+    call out_main_str
     pop r12
     ret
 
