@@ -48,8 +48,32 @@
 %define ARG_ENTRY_SIZE  32      ; key_ptr, key_len, val_ptr, val_len (dq each)
 %define MAX_COMP_DEPTH  16
 
+; responsive/hover variants (parse.asm class_apply + emit.asm emit_variants)
+; variant entry: 16 bytes = node u32, breakpoint u32, field u32, value u32
+%define MAX_VARIANTS   64
+%define VAR_ENTRY      16
+%define V_NODE         0
+%define V_BP           4               ; 0=hover 1=xs 2=sm 3=md 4=lg 5=xl 6=2xl
+%define V_FIELD        8               ; N_* offset that changed
+%define V_VALUE        12              ; new u32 value of that field
+; breakpoint min-widths (px); bp 0 = hover (no media query)
+%define BP_XS          420
+%define BP_SM          640
+%define BP_MD          768
+%define BP_LG          1024
+%define BP_XL          1280
+%define BP_2XL         1536
+
+; real HTML tag ids (tables.inc tags table) - the ones the compiler
+; synthesizes internally
+%define TAG_DIV      2
+%define TAG_SPAN     44
+%define TAG_BUTTON   73
+%define TAG_IMG      74
+
 ; node struct offsets (u32 unless noted)
 %define N_TAG        0               ; u8: 0=view 1=label 2=button
+%define N_TAG_ID     127             ; u8: real HTML tag id (tags table)
 %define N_TEXT_PTR   2               ; u32 offset into in_buf (0 = no text)
 %define N_TEXT_LEN   6               ; u32
 %define N_BG         10              ; u32 0xRRGGBB (0xFFFFFFFF = none)
