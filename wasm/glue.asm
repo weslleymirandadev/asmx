@@ -31,7 +31,32 @@ section .data
  db '  const ui = document.getElementById("ui") || (() => { const d = document.createElement("div"); d.id = "ui"; document.body.appendChild(d); return d; })();', 10
  db '  ui.style.cssText = "position:relative;width:100%;max-width:720px;margin:0 auto";', 10
  db '  const mod = (ui.dataset.modules || "/app.wasm").split(",")[0];', 10
- db '  const { instance } = await WebAssembly.instantiateStreaming(fetch(mod));', 10
+ db '  // RPC (ROADMAP item 4): the wasm module imports env.fetch_req. The', 10
+ db '  // glue runs a SYNCHRONOUS XHR (the wasm call blocks, so async fetch', 10
+ db '  // cannot work on the main thread - the event loop would never', 10
+ db '  // resume) and writes the response body into the module memory at', 10
+ db '  // resp_area(), setting resp_len.value. Returns the HTTP status.', 10
+ db '  // The wasm side owns when/what: it passes url/method/body pointers', 10
+ db '  // and reads the response buffer afterwards.', 10
+ db '  const fetch_req = (up, ul, mp, ml, bp, bl) => {', 10
+ db '    const buf = mem();', 10
+ db '    const url = location.origin + dec.decode(new Uint8Array(buf, up, ul));', 10
+ db '    const method = dec.decode(new Uint8Array(buf, mp, ml));', 10
+ db '    const body = bl ? dec.decode(new Uint8Array(buf, bp, bl)) : null;', 10
+ db '    const xhr = new XMLHttpRequest();', 10
+ db '    xhr.open(method, url, false);', 10
+ db '    if (body !== null) xhr.setRequestHeader("Content-Type", "application/json");', 10
+ db '    xhr.send(body);', 10
+ db '    const txt = xhr.responseText || "";', 10
+ db '    const enc = new TextEncoder().encode(txt);', 10
+ db '    const cap = (e.resp_cap && e.resp_cap()) || 4096;', 10
+ db '    const n = Math.min(enc.length, cap);', 10
+ db '    const dst = e.resp_area ? e.resp_area() : 0;', 10
+ db '    new Uint8Array(mem()).set(enc.subarray(0, n), dst);', 10
+ db '    if (e.resp_len) e.resp_len.value = n;', 10
+ db '    return xhr.status || 0;', 10
+ db '  };', 10
+ db '  const { instance } = await WebAssembly.instantiateStreaming(fetch(mod), { env: { fetch_req } });', 10
  db '  let e = instance.exports;', 10
  db '  const mem = () => e.memory.buffer;', 10
  db '  const dec = new TextDecoder();', 10
@@ -227,7 +252,7 @@ section .data
             db '      const b = new Uint8Array(await r.arrayBuffer());', 10
             db '      if (b.byteLength !== snapBytes.byteLength || b.some((v, i) => v !== snapBytes[i])) {', 10
             db '        snapBytes = b;', 10
-            db '        const { instance: nxt } = await WebAssembly.instantiate(b, {});', 10
+            db '        const { instance: nxt } = await WebAssembly.instantiate(b, { env: { fetch_req } });', 10
             db '        e = nxt.exports;', 10
             db '        if (e.init) e.init();', 10
             db '        if (e.render) e.render();', 10
