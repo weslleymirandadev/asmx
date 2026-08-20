@@ -278,9 +278,23 @@ get_about:
     asx.next
 ```
 
-- **Tags**: `@main @div @section @nav @header @footer @h1 @h2 @h3 @p @span
-  @a @button`. Text-bearing tags (`h1 h2 h3 p span a button`) take inline
-  text after a colon: `@h1 text-4xl: "Text"`.
+- **Tags**: 86 real HTML tags — the full layout set (`@main @div @section
+  @nav @header @footer @article @aside @figure @blockquote @ul @ol @li
+  @form @table @thead @tbody @tr @td @th @details @dialog @video @audio
+  @picture @iframe @select @textarea @fieldset @dl @dt @dd @menu @hgroup`),
+  text tags (`@h1`–`@h6 @p @span @a @label @strong @em @code @pre @small
+  @b @i @u @mark @time @cite @q @abbr @sub @sup @kbd @samp @var @del @ins
+  @s @option @figcaption @legend @caption @summary`), `@button`, and the
+  void elements (`@img @input @br @hr @source @meta @link @area @base
+  @col @embed @track @wbr` — no closing tag). The real tag name survives
+  the whole pipeline: the SSR shell and the client-rendered DOM both emit
+  `<a href="...">`, `<nav>`, `<h1>` — not a `<div>`/`<span>` template.
+  Text-bearing tags take inline text after a colon:
+  `@h1 text-4xl: "Text"`.
+- **Attributes**: any `name="value"` on a tag is kept and emitted on the
+  real element — `@a href="/"` renders `<a href="/">`, `@img src="..."`
+  renders `<img src="...">`. `onclick` is special-cased (see Interactive
+  elements below); every other attribute is passed through verbatim.
 - **Classes**: `bg-<color> text-<color> text-<size> font-bold p-* m-* mt-*
   mb-* w-* min-h-screen` — full Tailwind v3 palette (slate→rose, 50–950,
   black/white) and spacing scale (0→96, px, fractions, screen).
@@ -507,7 +521,8 @@ compute. The page also carries:
 
 - `data-asx-root="<route>"` on `#ui` — the root id the runtime hydrates;
 - `data-asx-checksum="<hex>"` — FNV-1a over the canonical IR (records
-  with the text_ptr field skipped + strings in record order);
+  with the text_ptr and attr_ptr fields skipped + strings in record
+  order);
 - `<script type="application/asx-state">` — the hydration snapshot
   (minimal render state, e.g. `{"root":"index"}`; initial state values
   live in the module itself, emitted from the `state` directives);
@@ -519,14 +534,21 @@ compute. The page also carries:
 ```html
 <div id="ui" data-asx-root="index" data-asx-checksum="474ea74f"
      data-modules="/index.wasm">
-  <div data-asx-id="0" style="position:relative;display:flex;...">
-    <span data-asx-id="1" style="...">LOOK AT THE MONKEY</span>
+  <main data-asx-id="0" style="position:relative;display:flex;...">
+    <h1 data-asx-id="1" style="...">LOOK AT THE MONKEY</h1>
+    <p data-asx-id="2" style="...">assembly on the server - wasm in the browser</p>
     ...
-  </div>
+  </main>
 </div>
 <script type="application/asx-state">{"root":"index"}</script>
 <script type="module" src="/_asx/glue.js"></script>
 ```
+
+The shell emits the **real HTML tag** per widget (`<main>`, `<h1>`, `<a
+href="/">`, `<button data-asx-role="button">` ...) — carried in the record
+as a tag id (byte 1) and resolved through the same tag table both backends
+share. Attributes (`href`, `src`, ...) ride along (record bytes 26..29,
+pointer into the string pool) so client-rendered nodes get them too.
 
 The runtime is an explicit phase machine:
 
