@@ -119,6 +119,24 @@ serialize:
     mov eax, 1
 .have_type:
     mov [rdi], al
+    ; real HTML tag id (record byte 1; 0 = div default via memset).
+    ; A button emits TWO records with the same node: the view (kind 1)
+    ; is <button>, its label (kind 2) must be <span> (a <button> cannot
+    ; nest a <button>).
+    mov eax, [r13]              ; kind
+    cmp eax, 2
+    je .tag_lbl
+    cmp eax, 1
+    je .tag_btn
+    movzx eax, byte [r15 + N_TAG_ID]
+    jmp .have_tag
+.tag_lbl:
+    mov eax, TAG_SPAN
+    jmp .have_tag
+.tag_btn:
+    mov eax, TAG_BUTTON
+.have_tag:
+    mov [rdi + 1], al
     ; x/y/w/h
     mov eax, [r15 + N_AX]
     mov [rdi + 2], ax
@@ -326,14 +344,54 @@ serialize:
     ; carries the same flag (emit.asm) so BOTH ssr_checksum sides skip
     ; the string - the interpolated value is runtime data (ssr.state may
     ; override it), not part of the canonical IR.
+    ; A button emits TWO records with the same node (view + label). The
+    ; VIEW has no text, so only the LABEL may carry the flag: emit.asm
+    ; only emits the dyn store on the label path, and byte 25 enters the
+    ; hash on both sides (only 16..20 is skipped). Setting it on the view
+    ; here made the server hash diverge from the wasm hash (e.g. /about:
+    ; 7c9f04e4 vs 17dbaf51).
+    imul rax, r12, 32
+    lea rdi, [blob_buf + rax + 24]
+    cmp byte [rdi], 1           ; type 1 (text) only
+    jne .next_nodyn
     mov edi, [r13 + 4]          ; node idx (rec_order entry)
-    call dyn_find
+    call dyn_find               ; clobbers rdi - recompute below
     cmp rax, -1
     je .next_nodyn
     imul rax, r12, 32
     lea rdi, [blob_buf + rax + 24]
     mov byte [rdi + 25], 1
 .next_nodyn:
+    ; html attributes: copy the node's 'name="value" ' string from
+    ; attr_buf into the pool and record the RELATIVE offset at record
+    ; bytes 26..29 (attr_ptr). The wasm side stores the ABSOLUTE address
+    ; there, so ssr_hash/ssr_checksum skip bytes 26..30 on both sides.
+    ; (rdi may be clobbered by dyn_find - recompute the record base)
+    imul rax, r12, 32
+    lea rdi, [blob_buf + rax + 24]
+    mov ebx, [r13 + 4]          ; node idx
+    mov eax, [attr_len + rbx*4]
+    test eax, eax
+    jz .attr_none
+    mov ecx, eax
+    mov eax, [blob_len]
+    mov [rdi + 26], eax         ; attr_ptr (relative to the blob)
+    lea r10, [blob_buf + rax]
+    mov esi, [attr_off + rbx*4]
+    lea rsi, [attr_buf + rsi]
+    xor r8, r8
+.at_copy:
+    cmp r8, rcx
+    jge .at_done
+    mov al, [rsi + r8]
+    mov [r10 + r8], al
+    inc r8
+    jmp .at_copy
+.at_done:
+    mov byte [r10 + rcx], 0     ; null terminator (pool convention)
+    lea rax, [rcx + 1]
+    add [blob_len], rax
+.attr_none:
     inc r12
     jmp .loop
 .err_blob:
