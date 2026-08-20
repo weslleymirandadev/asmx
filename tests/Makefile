@@ -15,12 +15,12 @@ TARGET  := $(BUILD)/server
 # except ui/ (the DSL compiler tool) and tests/
 PKG_SRCS := $(shell find $(PKG) -name '*.asm' ! -path '$(PKG)/ui/*' ! -path '$(PKG)/tests/*')
 APP_ASM  := $(wildcard $(APP)/*.asm)
-APP_S    := $(wildcard $(APP)/*.s) $(wildcard $(APP)/api/*/*.s)
+APP_S    := $(wildcard $(APP)/*.asx) $(wildcard $(APP)/api/*/*.asx)
 PKG_OBJS := $(PKG_SRCS:$(PKG)/%.asm=$(BUILD)/pkg/%.o)
-APP_OBJS := $(APP_ASM:$(APP)/%.asm=$(BUILD)/app/%.o) $(APP_S:$(APP)/%.s=$(BUILD)/app/%.o) $(BUILD)/app/middleware.o
+APP_OBJS := $(APP_ASM:$(APP)/%.asm=$(BUILD)/app/%.o) $(APP_S:$(APP)/%.asx=$(BUILD)/app/%.o) $(BUILD)/app/middleware.o
 OBJS     := $(PKG_OBJS) $(APP_OBJS)
 
-route_path = $(if $(filter $(APP)/not-found.s,$1),/__not_found,$(if $(filter $(APP)/page.s,$1),/,$(patsubst $(APP)/%/,/%,$(patsubst $(APP)/%/page.s,/%,$(patsubst $(APP)/%/route.s,/%,$1)))))
+route_path = $(if $(filter $(APP)/not-found.asx,$1),/__not_found,$(if $(filter $(APP)/page.asx,$1),/,$(patsubst $(APP)/%/,/%,$(patsubst $(APP)/%/page.asx,/%,$(patsubst $(APP)/%/route.asx,/%,$1)))))
 
 UI_CP := $(BUILD)/tools/ui-compile
 UI_CP_SRC := $(PKG)/ui/compile.asm $(shell find $(PKG)/ui -name '*.asm' -o -name '*.inc')
@@ -39,13 +39,13 @@ $(BUILD)/app/%.o: $(APP)/%.asm | $(BUILD)
 	@mkdir -p $(dir $@)
 	$(AS) -f elf64 -I $(PKG) -I $(APP) -P$(PKG)/asx.inc -o $@ $<
 
-# page.s: @ DSL -> shell HTML + .wat per component, then nasm -> .o
-$(BUILD)/app/%.s: $(APP)/%.s $(UI_CP) | $(BUILD)
+# page.asx: @ DSL -> shell HTML + .wat per component, then nasm -> .o
+$(BUILD)/app/%.s: $(APP)/%.asx $(UI_CP) | $(BUILD)
 	@mkdir -p $(dir $@)
 	$(UI_CP) $< $@
 
 $(BUILD)/app/%.o: $(BUILD)/app/%.s | $(BUILD)
-	$(AS) -f elf64 -I $(PKG) -I $(APP) -P$(PKG)/asx.inc -DROUTE_PATH=\"$(call route_path,$(APP)/$*.s)\" -o $@ $<
+	$(AS) -f elf64 -I $(PKG) -I $(APP) -P$(PKG)/asx.inc -DROUTE_PATH=\"$(call route_path,$(APP)/$*.asx)\" -o $@ $<
 
 $(UI_CP): $(UI_CP_SRC) | $(BUILD)
 	@mkdir -p $(dir $@)

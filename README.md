@@ -5,8 +5,8 @@ No libc, no runtime, no dependencies — just a static ELF binary that speaks
 HTTP. The frontend is **WebAssembly** (also generated from assembly), so the
 whole stack — server and browser — is assembly.
 
-Next.js-style file conventions: `page.s` for HTML pages, `route.s` for API
-handlers, `not-found.s` for the 404 page, and a `static/` folder served
+Next.js-style file conventions: `page.asx` for HTML pages, `route.asx` for API
+handlers, `not-found.asx` for the 404 page, and a `static/` folder served
 automatically. Pages declare their UI with the `@` DSL (Tailwind-like) which
 compiles to a WASM module per route; the server renders the shell, the glue
 script instantiates the module and renders the widgets to the DOM.
@@ -78,8 +78,8 @@ myapp/
 │   ├── ui/                <- the @ DSL compiler (build tool, pure asm)
 │   └── wasm/              <- framework WAT lib + glue.js generator
 ├── static/                <- per-route UI wasm modules (served automatically)
-│   ├── index.wasm         <- root page module (src/app/page.s)
-│   └── about/page.wasm    <- /about module (src/app/about/page.s)
+│   ├── index.wasm         <- root page module (src/app/page.asx)
+│   └── about/page.wasm    <- /about module (src/app/about/page.asx)
 ├── src/
 │   ├── main.asm           <- entry: listen + route dispatch
 │   ├── app/               <- your routes (see Routing)
@@ -94,15 +94,15 @@ The Makefile passes it to the assembler via `-DROUTE_PATH`.
 
 | file                              | route            | kind          |
 |-----------------------------------|------------------|---------------|
-| `src/app/page.s`                  | `/`              | HTML page     |
-| `src/app/about/page.s`            | `/about`         | HTML page     |
-| `src/app/api/hello/route.s`       | `/api/hello`     | API handler   |
-| `src/app/profile/[id]/page.s`     | `/profile/[id]`  | dynamic page  |
-| `src/app/not-found.s`             | (reserved)       | 404 page      |
+| `src/app/page.asx`                  | `/`              | HTML page     |
+| `src/app/about/page.asx`            | `/about`         | HTML page     |
+| `src/app/api/hello/route.asx`       | `/api/hello`     | API handler   |
+| `src/app/profile/[id]/page.asx`     | `/profile/[id]`  | dynamic page  |
+| `src/app/not-found.asx`             | (reserved)       | 404 page      |
 
-- `page.s` = a page that sends HTML (implicit GET, like `app/page.tsx`).
-- `route.s` = an API handler (any response: JSON, text, ...).
-- `not-found.s` = the custom 404 page (path reserved as `/__not_found`).
+- `page.asx` = a page that sends HTML (implicit GET, like `app/page.tsx`).
+- `route.asx` = an API handler (any response: JSON, text, ...).
+- `not-found.asx` = the custom 404 page (path reserved as `/__not_found`).
 - Anything in `static/` is served at `/` automatically — **no route needed**.
 
 ### Minimal page
@@ -110,7 +110,7 @@ The Makefile passes it to the assembler via `-DROUTE_PATH`.
 Pages run in `section .SERVER` and end with `asx.next`:
 
 ```nasm
-; src/app/page.s  ->  GET /
+; src/app/page.asx  ->  GET /
 ; asx.inc is pre-included by the Makefile
 
 section .data
@@ -126,15 +126,15 @@ get_home:
 
 A `page` route is GET-only — POST yields an automatic 405.
 
-### Middleware (`src/middleware.s`)
+### Middleware (`src/middleware.asx`)
 
-Next.js `middleware.ts` style: a `src/middleware.s` file runs BEFORE routing,
+Next.js `middleware.ts` style: a `src/middleware.asx` file runs BEFORE routing,
 on every request. It can let the request through, redirect it, rewrite the
 path, or answer directly. It lives at the same level as `app/` and
 `components/`:
 
 ```nasm
-; src/middleware.s - protect /admin/* with a session cookie
+; src/middleware.asx - protect /admin/* with a session cookie
 ; asx.inc is pre-included by the Makefile
 
 middleware mw_auth
@@ -189,7 +189,7 @@ request, so the matcher check is up to you (as in Next.js `config.matcher`).
 ### Minimal API
 
 ```nasm
-; src/app/api/hello/route.s  ->  /api/hello
+; src/app/api/hello/route.asx  ->  /api/hello
 ; asx.inc is pre-included by the Makefile
 
 section .data
@@ -206,7 +206,7 @@ get_hello:
 ### Route with all methods
 
 ```nasm
-; src/app/api/user/route.s  ->  /api/user
+; src/app/api/user/route.asx  ->  /api/user
 ; asx.inc is pre-included by the Makefile
 
 section .data
@@ -246,7 +246,7 @@ Allowed`. HEAD/OPTIONS are parsed but not dispatched yet (405). Single-method
 convenience macros: `route.get`, `route.post`, `route.put`, `route.patch`,
 `route.delete`, `route.both` (GET+POST).
 
-## The `@` DSL (declaring UI in page.s)
+## The `@` DSL (declaring UI in page.asx)
 
 Pages can declare their UI directly in `.data` with the `@` DSL — a
 Tailwind-flavored, indentation-based tree language. It is NOT HTML: the
@@ -254,7 +254,7 @@ build compiles each block into a serialized widget tree, an HTML shell, and
 a WASM module that renders it in the browser.
 
 ```nasm
-; src/app/about/page.s  ->  GET /about
+; src/app/about/page.asx  ->  GET /about
 ; asx.inc is pre-included by the Makefile
 
 section .data
@@ -300,7 +300,7 @@ linear memory (scalars or typed records); the compiler emits the render
 + update logic, and the glue only forwards clicks by widget id.
 
 ```nasm
-; src/app/page.s (the home page)
+; src/app/page.asx (the home page)
 section .data
     index_content:
         @theme bg #0f1117 text #f5f5f5 accent #f97316
@@ -339,12 +339,12 @@ section .data
 
 ## Components (`@@name`)
 
-Reusable blocks live in `src/components/<name>.s` and are invoked with
+Reusable blocks live in `src/components/<name>.asx` and are invoked with
 `@@name key="value"` (or `@@name key="value":` + children on the next line).
 They take `{param}` placeholders and a special `{children}` slot.
 
 ```nasm
-; src/components/badge.s
+; src/components/badge.asx
 ; Usage: @@badge color="green-500": "text"
 badge:
     @div bg-{color} p-2
@@ -353,7 +353,7 @@ badge:
 ```
 
 ```nasm
-; src/components/card.s
+; src/components/card.asx
 ; Usage: @@card color="blue-500" title="...": "children here"
 card:
     @div bg-{color} p-6
@@ -371,14 +371,14 @@ card:
   rebuilds every page (`COMP_SRCS` in the Makefile).
 - The page block also gets an implicit label: `@@card` in `about_content`
   compiles to `about_content.wat` + `_main.wat` under
-  `build/<page>.s.d/`, linked into the page's module.
+  `build/<page>.asx.d/`, linked into the page's module.
 
 ### Typed props
 
 A component can bind a global state by name with a type annotation:
 
 ```nasm
-; src/app/page.s
+; src/app/page.asx
 section .data
     index_content:
         @main p-8
@@ -393,7 +393,7 @@ section .data
             @@usercard user: user_t
         @end
 
-; src/components/usercard.s
+; src/components/usercard.asx
 usercard:
     @div bg-orange-500 p-4
         @p text-white: "{user.name}"
@@ -411,11 +411,11 @@ accessible and typed.
 ## Dynamic routes (`[id]` segments)
 
 Next.js-style slugs: a `[id]` segment in the file path becomes a pattern
-route. `src/app/profile/[id]/page.s` matches `/profile/joao`, `/profile/42`,
+route. `src/app/profile/[id]/page.asx` matches `/profile/joao`, `/profile/42`,
 etc.
 
 ```nasm
-; src/app/profile/[id]/page.s  ->  GET /profile/<slug>
+; src/app/profile/[id]/page.asx  ->  GET /profile/<slug>
 ; asx.inc is pre-included by the Makefile
 
 section .data
@@ -453,21 +453,21 @@ How it works:
 - A slug containing a `.` is treated as a static asset (e.g.
   `/profile/page.wasm` is a file, not a slug) so dynamic routes never shadow
   static files.
-- You can have BOTH `src/app/profile/page.s` (static `/profile`) and
-  `src/app/profile/[id]/page.s` (dynamic `/profile/<slug>`) — they get
+- You can have BOTH `src/app/profile/page.asx` (static `/profile`) and
+  `src/app/profile/[id]/page.asx` (dynamic `/profile/<slug>`) — they get
   separate modules (`static/profile/page.wasm` and
   `static/profile/[id]/page.wasm`) and the exact route wins.
 
 ## How the frontend is built
 
-Each `@` block in a `page.s` goes through `build/tools/ui-compile` — a
+Each `@` block in a `page.asx` goes through `build/tools/ui-compile` — a
 **pure-assembly preprocessor** (no Python):
 
 1. parses the block (tags, classes, params, children, `state`/`type`
    directives, `onclick` attributes, `{state.field}` interpolations),
 2. expands `@@component` calls from `src/components/`,
 3. emits one `.wat` file per component + a `_main.wat` (render + theme +
-   event wiring) into `build/<page>.s.d/`,
+   event wiring) into `build/<page>.asx.d/`,
 4. rewrites the page with an **SSR HTML shell**:
    `<div id="ui" data-asx-root="..." data-asx-checksum="...">` + the full
    server-rendered widget tree + the state snapshot + the glue script tag.
@@ -562,7 +562,7 @@ the `state` directive). To inject a real value server-side, the page handler
 calls `ssr.state` before `res.content`:
 
 ```nasm
-; src/app/page.s
+; src/app/page.asx
 section .data
     index_content:
         @main p-8
@@ -641,7 +641,7 @@ res.text ptr        ; 200, text/plain
 res.html ptr        ; 200, text/html
 res.status code     ; status code, empty body (e.g. res.status 404)
 res.bytes ptr, len  ; 200 JSON with explicit length (raw buffers)
-res.content ptr     ; page.s @ DSL block: send the HTML shell whose glue
+res.content ptr     ; page.asx @ DSL block: send the HTML shell whose glue
                     ; renders the per-route wasm module
 ```
 
@@ -693,10 +693,10 @@ route.both get, post
 
 | section    | use                              | exec |
 |------------|----------------------------------|------|
-| `.GET`     | GET API handler (`route.s`)      | yes  |
-| `.POST`    | POST API handler (`route.s`)     | yes  |
+| `.GET`     | GET API handler (`route.asx`)      | yes  |
+| `.POST`    | POST API handler (`route.asx`)     | yes  |
 | `.PUT` / `.PATCH` / `.DELETE` | same        | yes  |
-| `.SERVER`  | page handler (`page.s`, SSR)     | yes  |
+| `.SERVER`  | page handler (`page.asx`, SSR)     | yes  |
 | `.CLIENT`  | client assets (`client` macro)   | no   |
 
 ## JSON
@@ -707,7 +707,7 @@ invalid). `json.find buf, len, "key"` extracts a value: `rax` = value ptr,
 without quotes.
 
 ```nasm
-; src/app/api/login/route.s
+; src/app/api/login/route.asx
 ; asx.inc is pre-included by the Makefile
 
 section .data
@@ -780,7 +780,7 @@ garbage rejected.
 ## POST body
 
 ```nasm
-; src/app/api/echo/route.s
+; src/app/api/echo/route.asx
 ; asx.inc is pre-included by the Makefile
 
 route.post post_echo
@@ -817,7 +817,7 @@ custom 404.
 ## Custom 404 page
 
 ```nasm
-; src/app/not-found.s
+; src/app/not-found.asx
 ; asx.inc is pre-included by the Makefile
 
 section .data
@@ -834,7 +834,7 @@ nf_handler:
 ## Makefile
 
 The Makefile is zero-maintenance: every `.asm` in the framework and every
-`.asm`/`.s` under `src/` is discovered automatically. New routes and new
+`.asm`/`.asx` under `src/` is discovered automatically. New routes and new
 framework modules build with no edits. The only exception is `asx/ui/`,
 which is the @ DSL compiler build tool (never linked into the server).
 
