@@ -63,6 +63,7 @@ section .data
 section .bss
     ts_start   resq 2      ; clock_gettime timespec: sec, nsec
     ts_end     resq 2
+global req_count
     req_count  resq 1
 
 section .text
