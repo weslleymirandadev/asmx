@@ -862,8 +862,17 @@ brackets: `static/profile/[id]/page.wasm`.
 
 - `src/main.asm` calls `asx.listen 3000`, which grabs the return address as
   the per-request handler, binds the socket and falls into the `requests`
-  accept loop: accept -> read -> parse request line + headers -> copy the
-  path into `route` -> dispatch.
+  accept loop: accept -> fork -> (child) read -> parse request line +
+  headers -> copy the path into `route` -> dispatch.
+- **Concurrency: fork-per-connection.** The parent accepts and forks; the
+  child processes exactly ONE request and exits; the parent closes its
+  copy of the client fd and keeps accepting. A slow request (upload,
+  large static, SSE) never blocks the queue. No locks, no shared state:
+  the fork copies memory (COW), so `buffer`/`route`/`resp_buf` are
+  per-connection by construction. `SIGCHLD=SIG_IGN` (set in `asx_listen`)
+  makes the kernel reap finished children — no zombies, no waitpid. The
+  child closes `server_fd` at fork time so a slow child never holds the
+  port after the parent dies (hot reload rebinds immediately).
 - The router scans a linker-generated section (`__start_route` /
   `__stop_route`, 48-byte entries: path, GET, POST, PUT, PATCH, DELETE).
   Exact match first, then dynamic `[id]` patterns (prefix + suffix match,
@@ -874,8 +883,8 @@ brackets: `static/profile/[id]/page.wasm`.
 - Frontend modules are plain WebAssembly: the glue JS is a tiny DOM syncer
   (~5 KB) that reads the widget array from module memory and mirrors it into
   the DOM.
-- Single-threaded, blocking accept loop. Concurrency (fork, epoll) is on
-  the roadmap.
+- Single-threaded per request, but concurrent across requests (fork).
+  epoll / shared workers is on the roadmap.
 
 ## Testing
 
