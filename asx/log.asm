@@ -352,8 +352,9 @@ log_request:
 
 ; ----------------------------------------------------------------------
 ; clock_start() - capture ts_start for the CURRENT request. Called by the
-; core right after reading the request bytes (measurement starts when the
-; request arrives, not when the accept loop wakes up).
+; core right after the accept + SO_RCVTIMEO, BEFORE the fork: the child
+; inherits the timestamp (COW) and log_request() computes the full cycle
+; (fork + read wait + parse + dispatch + handler + response write).
 ; ----------------------------------------------------------------------
 global clock_start
 clock_start:

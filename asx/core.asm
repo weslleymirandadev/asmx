@@ -197,6 +197,17 @@ requests:
     mov r8, 16        ; sizeof(struct timeval)
     syscall
 
+    ; Start the request timer HERE, in the parent, right after the
+    ; accept: the child inherits ts_start via the fork (COW), so the
+    ; logged duration covers the FULL request cycle - fork + the read
+    ; wait (time for the request bytes to arrive from the client) +
+    ; parse + dispatch + handler + response write. The old placement
+    ; (after the read, in the child) skipped the fork and the entire
+    ; network wait, showing only the parse+respond microseconds.
+    ; (socket/bind/listen happen ONCE at startup in asx_listen - they
+    ; are not per-request and are not part of this duration.)
+    call clock_start
+
     ; fork: the child owns this connection, the parent keeps accepting
     mov rax, SYS_fork
     syscall
@@ -227,10 +238,6 @@ requests:
                               ; that closed early) - close and move on,
                               ; do NOT fabricate a 404 in the log
     mov rbx, rax                  ; bytes_read (rbx callee-saved)
-
-    ; Start the request timer - the request bytes just arrived, so the
-    ; duration covers only actual processing, not idle wait
-    call clock_start
 
     ; Parse request line
     mov rdi, buffer
