@@ -81,6 +81,12 @@ emit_shell:
     lea rdi, [s_ssr_sty3]
     call out_str
     call ssr_nl
+    ; --- responsive/hover variants: <style data-asx-variants> ---
+    ; one rule per variant entry: hover (no media query) or
+    ; @media(min-width:<bp>px). !important wins over the inline cssText
+    ; the glue writes during hydration (specificity of the attribute
+    ; selector is the same, importance is what breaks the tie).
+    call emit_variants
     ; --- the glue script (hydration happens in the browser) ---
     lea rdi, [s_sh6]
     call out_str
@@ -235,6 +241,40 @@ emit_wat_componente:
     lea rdi, [s_dyn_f2]
     call out_wat_str
 .l2n:
+    ; real HTML tag id: i32.store8 tag_id at widget_base + rec*32 + 1
+    lea rdi, [s_dyn_f1]
+    call out_wat_str
+    mov rdi, r12
+    imul rdi, rdi, 32
+    add rdi, 1
+    call itoa_wat
+    lea rdi, [s_tag_f2]
+    call out_wat_str
+    movzx edi, byte [r15 + 1]   ; tag id from the blob record
+    call itoa_wat
+    lea rdi, [s_tag_f3]
+    call out_wat_str
+    ; html attributes: i32.store ABSOLUTE address at widget_base +
+    ; rec*32 + 26 (bytes 26..29). The blob carried the relative offset;
+    ; the checksum skips 26..30 on both sides.
+    mov eax, [r15 + 26]
+    test eax, eax
+    jz .l2n_noattr
+    lea rdi, [s_dyn_f1]
+    call out_wat_str
+    mov rdi, r12
+    imul rdi, rdi, 32
+    add rdi, 26
+    call itoa_wat
+    lea rdi, [s_attr_f2]
+    call out_wat_str
+    mov edi, [r15 + 26]
+    call wat_text_addr          ; rax = endereco wasm do attr string
+    mov rdi, rax
+    call itoa_wat
+    lea rdi, [s_attr_f3]
+    call out_wat_str
+.l2n_noattr:
     inc r12
     jmp .l2
 .l2d:
@@ -292,6 +332,41 @@ emit_wat_componente:
     lea rdi, [s_wat_d3]
     call out_wat_str
 .dn:
+    ; html attributes: emit the attr string data segment (record byte
+    ; 26..29 carries the blob-relative offset; the store in the body
+    ; already wrote the absolute address into the wasm record)
+    mov eax, [r15 + 26]
+    test eax, eax
+    jz .dn_noattr
+    push r12
+    push r15
+    push rax                    ; attr offset (blob-relative)
+    mov rdi, rax
+    call wat_text_addr          ; rax = endereco wasm
+    mov rbx, rax
+    lea rdi, [s_wat_d1]
+    call out_wat_str
+    mov rdi, rbx
+    call itoa_wat
+    lea rdi, [s_wat_d2]
+    call out_wat_str
+    ; attr text: [blob_buf + attr_offset] up to the 0 (pool null)
+    pop rax
+    lea rdi, [blob_buf + rax]
+    mov rsi, rdi
+.atx_scan:
+    cmp byte [rsi], 0
+    je .atx_found
+    inc rsi
+    jmp .atx_scan
+.atx_found:
+    sub rsi, rdi                ; attr length
+    call out_wat_text
+    lea rdi, [s_wat_d3]
+    call out_wat_str
+    pop r15
+    pop r12
+.dn_noattr:
     inc r12
     jmp .dl
 .dd:
@@ -552,8 +627,14 @@ precalc_dyn:
     lea r9, [rec_order + rax]
     cmp dword [r9 + 4], r12d
     jne .pd_rec_next
+    ; a button emits TWO records with the same node (view + label);
+    ; the dyn text lives on the LABEL (kind 2) - skip records whose
+    ; text_offset is 0 (views), otherwise the montage would write at
+    ; the pool start (wat_text_addr(0)) and corrupt the first string.
     imul rax, r8, 32
     lea r9, [blob_buf + rax + 24]
+    cmp dword [r9 + 16], 0
+    je .pd_rec_next
     mov r12d, [r9 + 16]         ; text_offset
     ; dst
     mov rdi, r12
@@ -984,3 +1065,279 @@ out_wat_nibble:
 ; ----------------------------------------------------------------------
 ; append_wat_call - appends "  call $c_<label>\n" to the final module.
 ; On the first component it also writes the render header.
+
+; ----------------------------------------------------------------------
+; emit_variants - <style data-asx-variants>...</style> with one rule per
+; variant entry. The rule targets the widget by data-asx-id and uses
+; !important so it beats the inline cssText the glue writes during
+; hydration. Field -> CSS mapping mirrors ssr_css_view/ssr_css_label.
+; ----------------------------------------------------------------------
+emit_variants:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    cmp qword [variant_count], 0
+    je .done
+    lea rdi, [s_var_open]
+    call out_str
+    xor r13, r13
+.loop:
+    cmp r13, [variant_count]
+    jge .close
+    imul rax, r13, VAR_ENTRY
+    lea r15, [variant_tab + rax]
+    mov r12d, [r15 + V_BP]
+    mov ebx, [r15 + V_NODE]
+    ; selector: hover -> [data-asx-id="N"]:hover ; else @media(min-width:P)
+    test r12d, r12d
+    jnz .media
+    lea rdi, [s_var_hov1]
+    call out_str
+    mov rdi, rbx
+    call ssr_dec
+    lea rdi, [s_var_hov2]
+    call out_str
+    jmp .have_sel
+.media:
+    lea rdi, [s_var_mq1]
+    call out_str
+    mov rdi, r12
+    call variant_bp_width
+    mov rdi, rax
+    call ssr_dec
+    lea rdi, [s_var_mq2]
+    call out_str
+    mov rdi, rbx
+    call ssr_dec
+    lea rdi, [s_var_mq3]
+    call out_str
+.have_sel:
+    ; property for the changed field (u32 loads: the table stores
+    ; dwords; loading 8 bytes would mix in the next entry's bytes)
+    mov edi, [r15 + V_FIELD]
+    mov esi, [r15 + V_VALUE]
+    call emit_var_prop
+    lea rdi, [s_var_end]
+    call out_str
+    inc r13
+    jmp .loop
+.close:
+    lea rdi, [s_var_close]
+    call out_str
+    call ssr_nl
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; variant_bp_width(bp id) -> min-width px
+variant_bp_width:
+    cmp rdi, 1
+    jne .b2
+    mov rax, BP_XS
+    ret
+.b2:
+    cmp rdi, 2
+    jne .b3
+    mov rax, BP_SM
+    ret
+.b3:
+    cmp rdi, 3
+    jne .b4
+    mov rax, BP_MD
+    ret
+.b4:
+    cmp rdi, 4
+    jne .b5
+    mov rax, BP_LG
+    ret
+.b5:
+    cmp rdi, 5
+    jne .b6
+    mov rax, BP_XL
+    ret
+.b6:
+    mov rax, BP_2XL
+    ret
+
+; emit_var_prop(rdi = field offset, rsi = value) - writes "prop:val;" 
+emit_var_prop:
+    push rbx
+    push r12
+    push r13
+    mov r12, rdi
+    mov r13, rsi
+    ; dispatch by field offset (mirrors the node struct + ssr emitters)
+    cmp r12d, N_BG
+    jne .not_bg
+    lea rdi, [s_var_bg]
+    call out_str
+    mov rdi, r13
+    call ssr_hex6
+    jmp .done
+.not_bg:
+    cmp r12d, N_COLOR
+    jne .not_color
+    lea rdi, [s_var_tcol]
+    call out_str
+    mov rdi, r13
+    call ssr_hex6
+    jmp .done
+.not_color:
+    cmp r12d, N_FS
+    jne .not_fs
+    lea rdi, [s_var_fs]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_fs:
+    cmp r12d, N_PAD
+    jne .not_pad
+    lea rdi, [s_var_pad]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_pad:
+    cmp r12d, N_MT
+    jne .not_mt
+    lea rdi, [s_var_mt]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_mt:
+    cmp r12d, N_MB
+    jne .not_mb
+    lea rdi, [s_var_mb]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_mb:
+    cmp r12d, N_W
+    jne .not_w
+    lea rdi, [s_var_w]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_w:
+    cmp r12d, N_GAP
+    jne .not_gap
+    lea rdi, [s_var_gap]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_gap:
+    cmp r12d, N_RADIUS
+    jne .not_rad
+    cmp r13d, 255
+    jne .rad_n
+    lea rdi, [s_var_rad_full]
+    call out_str
+    jmp .done
+.rad_n:
+    lea rdi, [s_var_rad]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_rad:
+    cmp r12d, N_WEIGHT
+    jne .not_fw
+    lea rdi, [s_var_fw]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    jmp .done
+.not_fw:
+    cmp r12d, N_ALIGN
+    jne .not_align
+    cmp r13d, 1
+    je .al_c
+    cmp r13d, 2
+    je .al_r
+    lea rdi, [s_var_ta_j]
+    call out_str
+    jmp .done
+.al_c:
+    lea rdi, [s_var_ta_c]
+    call out_str
+    jmp .done
+.al_r:
+    lea rdi, [s_var_ta_r]
+    call out_str
+    jmp .done
+.not_align:
+    cmp r12d, N_OPACITY
+    jne .not_op
+    lea rdi, [s_var_op]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    jmp .done
+.not_op:
+    cmp r12d, N_GRID_COLS
+    jne .not_gc
+    lea rdi, [s_var_gcols]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_gcols2]
+    call out_str
+    jmp .done
+.not_gc:
+    cmp r12d, N_FLAGS
+    jne .done
+    ; flags: emit display:none / display:grid / display:flex + direction
+    test r13d, F_HIDDEN
+    jz .not_hid
+    lea rdi, [s_var_hidden]
+    call out_str
+    jmp .done
+.not_hid:
+    test r13d, F_GRID
+    jz .not_grd
+    lea rdi, [s_var_grid]
+    call out_str
+    jmp .done
+.not_grd:
+    test r13d, F_FLEX
+    jz .done
+    lea rdi, [s_var_flex]
+    call out_str
+    test r13d, F_FLEXCOL
+    jz .row
+    lea rdi, [s_var_col]
+    jmp .dir_call
+.row:
+    lea rdi, [s_var_row]
+.dir_call:
+    call out_str
+.done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
