@@ -2099,6 +2099,8 @@ emit_var_prop:
     call out_str
     jmp .done
 .not_grd:
+    ; display (mutually exclusive): hidden/grid jump out, flex falls
+    ; through so wrap/grow/items/justify still emit on the same rule
     test r13d, F_FLEX
     jz .not_flex
     lea rdi, [s_var_flex]
@@ -2111,15 +2113,27 @@ emit_var_prop:
     lea rdi, [s_var_row]
 .dir_call:
     call out_str
-    jmp .done
+    lea rdi, [s_css_semi]        ; flex falls through to wrap/grow/items
+    call out_str
 .not_flex:
+    test r13d, F_WRAP
+    jz .not_wrap
+    lea rdi, [s_css_wrap]
+    call out_str
+.not_wrap:
+    test r13d, F_GROW
+    jz .not_grow
+    lea rdi, [s_css_grow]
+    call out_str
+.not_grow:
+    ; align-items (mutual - first match wins, then jump past the rest)
     test r13d, F_ITEMSC
     jz .not_items_c
     lea rdi, [s_css_items]
     call out_str
     lea rdi, [s_css_center]
     call out_str
-    jmp .done
+    jmp .not_items
 .not_items_c:
     test r13d, F_ITEMSE
     jz .not_items_e
@@ -2127,7 +2141,7 @@ emit_var_prop:
     call out_str
     lea rdi, [s_css_fe]
     call out_str
-    jmp .done
+    jmp .not_items
 .not_items_e:
     test r13d, F_ITEMSS
     jz .not_items_s
@@ -2135,23 +2149,23 @@ emit_var_prop:
     call out_str
     lea rdi, [s_css_fs]
     call out_str
-    jmp .done
+    jmp .not_items
 .not_items_s:
     test r13d, F_ITEMST
-    jz .not_items_t
+    jz .not_items
     lea rdi, [s_css_items]
     call out_str
     lea rdi, [s_css_stretch]
     call out_str
-    jmp .done
-.not_items_t:
+.not_items:
+    ; justify-content (mutual)
     test r13d, F_JUSTC
     jz .not_just_c
     lea rdi, [s_var_just]
     call out_str
     lea rdi, [s_css_center]
     call out_str
-    jmp .done
+    jmp .not_just
 .not_just_c:
     test r13d, F_JUSTE
     jz .not_just_e
@@ -2159,7 +2173,7 @@ emit_var_prop:
     call out_str
     lea rdi, [s_css_fe]
     call out_str
-    jmp .done
+    jmp .not_just
 .not_just_e:
     test r13d, F_JUSTB
     jz .not_just_b
@@ -2167,7 +2181,7 @@ emit_var_prop:
     call out_str
     lea rdi, [s_css_sb]
     call out_str
-    jmp .done
+    jmp .not_just
 .not_just_b:
     test r13d, F_JUSTA
     jz .not_just_a
@@ -2175,72 +2189,59 @@ emit_var_prop:
     call out_str
     lea rdi, [s_css_sa]
     call out_str
-    jmp .done
+    jmp .not_just
 .not_just_a:
     test r13d, F_JUSTV
-    jz .not_just_v
+    jz .not_just
     lea rdi, [s_var_just]
     call out_str
     lea rdi, [s_css_sv]
     call out_str
-    jmp .done
-.not_just_v:
-    test r13d, F_WRAP
-    jz .not_wrap
-    lea rdi, [s_css_wrap]
-    call out_str
-    jmp .done
-.not_wrap:
-    test r13d, F_GROW
-    jz .not_grow
-    lea rdi, [s_css_grow]
-    call out_str
-    jmp .done
-.not_grow:
+.not_just:
     test r13d, F_BOLD
     jz .not_bold
     lea rdi, [s_css_fw]
     call out_str
     lea rdi, [s_css_700]
     call out_str
-    jmp .done
 .not_bold:
+    ; text-transform (mutual)
     test r13d, F_UPPER
     jz .not_upper
     lea rdi, [s_css_tt]
     call out_str
-    jmp .done
+    jmp .not_tran
 .not_upper:
     test r13d, F_LOWER
     jz .not_lower
     lea rdi, [s_css_lo]
     call out_str
-    jmp .done
+    jmp .not_tran
 .not_lower:
     test r13d, F_CAPITALIZE
     jz .not_cap
     lea rdi, [s_css_tcap]
     call out_str
-    jmp .done
+    jmp .not_tran
 .not_cap:
     test r13d, F_NORMALCASE
-    jz .not_ncase
+    jz .not_tran
     lea rdi, [s_css_tnc]
     call out_str
-    jmp .done
-.not_ncase:
+.not_tran:
+    ; font-style (mutual)
     test r13d, F_ITALIC
     jz .not_ital
     lea rdi, [s_css_it]
     call out_str
-    jmp .done
+    jmp .not_fstyle
 .not_ital:
     test r13d, F_NOTITALIC
-    jz .not_notit
+    jz .not_fstyle
     lea rdi, [s_css_ni]
     call out_str
-    jmp .done
-.not_notit:
+.not_fstyle:
+    ; text-decoration-line (mutual)
     test r13d, F_UNDER
     jz .not_und
     lea rdi, [s_css_un]
