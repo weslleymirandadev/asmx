@@ -55,7 +55,7 @@ comp_stack:   resb MAX_COMP_DEPTH * 8
 comp_depth:   resq 1
 save_label_buf: resb 64
 save_label_len: resq 1
-style_buf:    resb MAX_RECORDS * STYLE_REC ; style records (26B: flags u32/weight u16/...)
+style_buf:    resb MAX_RECORDS * STYLE_REC ; style records (64B: flags u32/weight u16/typography/animation)
 style_len:    resq 1
 style_addr:   resq 1                  ; wasm address of the styles data segment
 variant_tab:  resb MAX_VARIANTS * VAR_ENTRY

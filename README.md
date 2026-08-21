@@ -298,10 +298,20 @@ get_about:
 - **Classes**: `bg-<color> text-<color> text-<size> font-bold p-* px-* py-*
   pt-* pb-* ps-* pe-* m-* mx-* my-* ms-* me-* ml-* mr-* mt-* mb-* w-*
   min-h-screen` — full Tailwind v3 palette (slate→rose, 50–950, black/white),
-  spacing scale (0→96, px, fractions, screen) and transitions
+  spacing scale (0→96, px, fractions, screen), transitions & animation
   (`transition` / `transition-all|none|colors|opacity|shadow|transform`,
-  `duration-<n>`, `ease-linear|in|out|in-out`, `delay-<n>` — animate
-  `hover:` / `sm:` / `md:` … changes).
+  `transition-behavior-normal|allow-discrete`, `duration-<n>`,
+  `ease-linear|in|out|in-out`, `delay-<n>`, `animate-none|spin|ping|pulse|bounce`
+  with SSR `@keyframes`) and the full typography set: `font-sans|serif|mono`,
+  `font-stretch-*`, `font-variant-numeric` (`ordinal`, `tabular-nums`, …),
+  `antialiased|subpixel-antialiased`, `not-italic`, `tracking-*`, `leading-*`
+  (named + 3..10), `line-clamp-<1..6>`, `list-inside|outside|none|disc|decimal`,
+  `text-start|end`, `overline|no-underline`, `decoration-<color|style|auto|
+  from-font|0-8>`, `underline-offset-auto|<n>`, `capitalize|normal-case`,
+  `truncate|text-ellipsis|text-clip`, `text-wrap|nowrap|balance|pretty`,
+  `indent-*`, `tab-*`, `align-*`, `whitespace-*`, `break-normal|words|all|keep`,
+  `wrap-normal|break-word|anywhere`, `hyphens-*`, `content-none` — all with
+  `hover:` / `sm:` / `md:` … variants.
 - **Children**: indentation is the tree. A bare string on its own line is a
   text child of the nearest open tag.
 - `@theme bg #hex text #hex accent #hex` (optional, anywhere in the block).

@@ -1359,6 +1359,27 @@ class_apply_core:
     jmp .done
 .not_gc:
     ; ---- transitions (2026-08-20) ----
+    ; transition-behavior-<suffix> MUST run before transition-<suffix>
+    ; ("transition-behavior-normal" starts with "transition-")
+    cmp r14d, 20
+    jb .not_tbehav
+    lea rdi, [r13]
+    lea rsi, [s_tbehav_prefix]
+    mov rdx, 20
+    call strncmp
+    test rax, rax
+    jnz .not_tbehav
+    lea rdi, [r13 + 20]
+    mov rsi, r14
+    sub rsi, 20
+    lea rdx, [tw_tbehav]
+    lea rcx, [tw_tbehav_end]
+    call tw_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_TBEHAV], eax
+    jmp .done
+.not_tbehav:
     ; transition-<suffix>: none/all/colors/opacity/shadow/transform
     cmp r14d, 11
     jb .not_transp
@@ -1443,6 +1464,601 @@ class_apply_core:
     mov [r12 + N_DELAY], eax
     jmp .done
 .not_delay:
+    ; ---- typography + animation (2026-08-20) ----
+    ; font-<family>: sans/serif/mono (prefix "font-"; the font-<weight>
+    ; names were consumed by tw_fontw above, so only families/stretch
+    ; reach here)
+    cmp r14d, 5
+    jb .not_fontp
+    lea rdi, [r13]
+    lea rsi, [s_font_prefix]
+    mov rdx, 5
+    call strncmp
+    test rax, rax
+    jnz .not_fontp
+    lea rdi, [r13 + 5]
+    mov rsi, r14
+    sub rsi, 5
+    lea rdx, [tw_family]
+    lea rcx, [tw_family_end]
+    call tw_lookup
+    cmp rax, -1
+    je .not_fontp
+    mov [r12 + N_FAMILY], eax
+    jmp .done
+.not_fontp:
+    ; font-stretch-<keyword>
+    cmp r14d, 13
+    jb .not_fstretch
+    lea rdi, [r13]
+    lea rsi, [s_font_stretch]
+    mov rdx, 13
+    call strncmp
+    test rax, rax
+    jnz .not_fstretch
+    lea rdi, [r13 + 13]
+    mov rsi, r14
+    sub rsi, 13
+    lea rdx, [tw_stretch]
+    lea rcx, [tw_stretch_end]
+    call tw_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_STRETCH], eax
+    jmp .done
+.not_fstretch:
+    ; font-variant-numeric (exact names, no common prefix)
+    mov rdi, r13
+    mov rsi, r14
+    lea rdx, [tw_varnum]
+    lea rcx, [tw_varnum_end]
+    call tw_lookup
+    cmp rax, -1
+    je .not_varnum
+    mov [r12 + N_VARNUM], eax
+    jmp .done
+.not_varnum:
+    ; tracking-<suffix>
+    cmp r14d, 9
+    jb .not_track
+    lea rdi, [r13]
+    lea rsi, [s_tracking]
+    mov rdx, 9
+    call strncmp
+    test rax, rax
+    jnz .not_track
+    lea rdi, [r13 + 9]
+    mov rsi, r14
+    sub rsi, 9
+    lea rdx, [tw_tracking]
+    lea rcx, [tw_tracking_end]
+    call tw_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_TRACK], eax
+    jmp .done
+.not_track:
+    ; leading-<suffix>: named (tw_leading) or numeric 3..10
+    cmp r14d, 8
+    jb .not_lead
+    lea rdi, [r13]
+    lea rsi, [s_leading]
+    mov rdx, 8
+    call strncmp
+    test rax, rax
+    jnz .not_lead
+    lea rdi, [r13 + 8]
+    mov rsi, r14
+    sub rsi, 8
+    lea rdx, [tw_leading]
+    lea rcx, [tw_leading_end]
+    call tw_lookup
+    cmp rax, -1
+    je .lead_num
+    mov [r12 + N_LEAD], eax
+    jmp .done
+.lead_num:
+    lea rdi, [r13 + 8]
+    mov rsi, r14
+    sub rsi, 8
+    call atoi_n
+    cmp rax, 3
+    jb .done
+    cmp rax, 10
+    ja .done
+    add rax, 4               ; leading-3 -> 7 .. leading-10 -> 14
+    mov [r12 + N_LEAD], eax
+    jmp .done
+.not_lead:
+    ; line-clamp-<n> (1..6) / line-clamp-none
+    cmp r14d, 11
+    jb .not_clamp
+    lea rdi, [r13]
+    lea rsi, [s_line_clamp]
+    mov rdx, 11
+    call strncmp
+    test rax, rax
+    jnz .not_clamp
+    lea rdi, [r13 + 11]
+    mov rsi, r14
+    sub rsi, 11
+    call atoi_n
+    cmp rax, 1
+    jb .done
+    cmp rax, 6
+    ja .done
+    mov [r12 + N_CLAMP], eax
+    jmp .done
+.not_clamp:
+    ; list-style-position: list-inside / list-outside
+    cmp r14d, 11
+    jne .not_lin
+    lea rdi, [r13]
+    lea rsi, [s_list_inside]
+    mov rdx, 11
+    call strncmp
+    test rax, rax
+    jnz .not_lin
+    mov dword [r12 + N_LISTPOS], 1
+    jmp .done
+.not_lin:
+    cmp r14d, 12
+    jne .not_lout
+    lea rdi, [r13]
+    lea rsi, [s_list_outside]
+    mov rdx, 12
+    call strncmp
+    test rax, rax
+    jnz .not_lout
+    mov dword [r12 + N_LISTPOS], 2
+    jmp .done
+.not_lout:
+    ; list-style-type: list-none / list-disc / list-decimal
+    cmp r14d, 9
+    jne .not_lt
+    lea rdi, [r13]
+    lea rsi, [s_list_none]
+    mov rdx, 9
+    call strncmp
+    test rax, rax
+    jnz .not_lt
+    mov dword [r12 + N_LISTTYPE], 1
+    jmp .done
+.not_lt:
+    cmp r14d, 9
+    jne .not_ld
+    lea rdi, [r13]
+    lea rsi, [s_list_disc]
+    mov rdx, 9
+    call strncmp
+    test rax, rax
+    jnz .not_ld
+    mov dword [r12 + N_LISTTYPE], 2
+    jmp .done
+.not_ld:
+    cmp r14d, 12
+    jne .not_ldec
+    lea rdi, [r13]
+    lea rsi, [s_list_decimal]
+    mov rdx, 12
+    call strncmp
+    test rax, rax
+    jnz .not_ldec
+    mov dword [r12 + N_LISTTYPE], 3
+    jmp .done
+.not_ldec:
+    ; text-align: text-start / text-end (before the text-<color> block)
+    cmp r14d, 10
+    jne .not_tstart
+    lea rdi, [r13]
+    lea rsi, [s_text_start]
+    mov rdx, 10
+    call strncmp
+    test rax, rax
+    jnz .not_tstart
+    mov byte [r12 + N_ALIGN], 4
+    jmp .done
+.not_tstart:
+    cmp r14d, 8
+    jne .not_tend
+    lea rdi, [r13]
+    lea rsi, [s_text_end]
+    mov rdx, 8
+    call strncmp
+    test rax, rax
+    jnz .not_tend
+    mov byte [r12 + N_ALIGN], 5
+    jmp .done
+.not_tend:
+    ; text-overflow: truncate / text-ellipsis / text-clip
+    cmp r14d, 8
+    jne .not_trunc
+    lea rdi, [r13]
+    lea rsi, [s_truncate]
+    mov rdx, 8
+    call strncmp
+    test rax, rax
+    jnz .not_trunc
+    mov dword [r12 + N_OVERFLOW], 3
+    jmp .done
+.not_trunc:
+    cmp r14d, 13
+    jne .not_tell
+    lea rdi, [r13]
+    lea rsi, [s_text_ellipsis]
+    mov rdx, 13
+    call strncmp
+    test rax, rax
+    jnz .not_tell
+    mov dword [r12 + N_OVERFLOW], 1
+    jmp .done
+.not_tell:
+    cmp r14d, 9
+    jne .not_tclip
+    lea rdi, [r13]
+    lea rsi, [s_text_clip]
+    mov rdx, 9
+    call strncmp
+    test rax, rax
+    jnz .not_tclip
+    mov dword [r12 + N_OVERFLOW], 2
+    jmp .done
+.not_tclip:
+    ; text-wrap / text-nowrap / text-balance / text-pretty (exact)
+    cmp r14d, 9
+    jne .not_twrap
+    lea rdi, [r13]
+    lea rsi, [s_text_wrap]
+    mov rdx, 9
+    call strncmp
+    test rax, rax
+    jnz .not_twrap
+    mov dword [r12 + N_TWRAP], 1
+    jmp .done
+.not_twrap:
+    cmp r14d, 11
+    jne .not_twn
+    lea rdi, [r13]
+    lea rsi, [s_text_nowrap]
+    mov rdx, 11
+    call strncmp
+    test rax, rax
+    jnz .not_twn
+    mov dword [r12 + N_TWRAP], 2
+    jmp .done
+.not_twn:
+    cmp r14d, 12
+    jne .not_twb
+    lea rdi, [r13]
+    lea rsi, [s_text_balance]
+    mov rdx, 12
+    call strncmp
+    test rax, rax
+    jnz .not_twb
+    mov dword [r12 + N_TWRAP], 3
+    jmp .done
+.not_twb:
+    cmp r14d, 11
+    jne .not_twp
+    lea rdi, [r13]
+    lea rsi, [s_text_pretty]
+    mov rdx, 11
+    call strncmp
+    test rax, rax
+    jnz .not_twp
+    mov dword [r12 + N_TWRAP], 4
+    jmp .done
+.not_twp:
+    ; decoration-<suffix>: color | style | auto/from-font | thickness px
+    cmp r14d, 11
+    jb .not_deco
+    lea rdi, [r13]
+    lea rsi, [s_decoration]
+    mov rdx, 11
+    call strncmp
+    test rax, rax
+    jnz .not_deco
+    lea rdi, [r13 + 11]
+    mov rsi, r14
+    sub rsi, 11
+    call palette_lookup
+    cmp rax, -1
+    je .deco_style
+    mov [r12 + N_DCOLOR], eax
+    jmp .done
+.deco_style:
+    lea rdi, [r13 + 11]
+    mov rsi, r14
+    sub rsi, 11
+    lea rdx, [tw_decostyle]
+    lea rcx, [tw_decostyle_end]
+    call tw_lookup
+    cmp rax, -1
+    je .deco_thick
+    mov [r12 + N_DSTYLE], eax
+    jmp .done
+.deco_thick:
+    lea rdi, [r13 + 11]
+    mov rsi, r14
+    sub rsi, 11
+    lea rdx, [tw_dthick]
+    lea rcx, [tw_dthick_end]
+    call tw_lookup
+    cmp rax, -1
+    je .deco_px
+    mov [r12 + N_DTHICK], eax
+    jmp .done
+.deco_px:
+    lea rdi, [r13 + 11]
+    mov rsi, r14
+    sub rsi, 11
+    call atoi_n
+    cmp rax, 9
+    jae .done
+    add rax, 2               ; decoration-<n> -> thickness px (n + 2)
+    mov [r12 + N_DTHICK], eax
+    jmp .done
+.not_deco:
+    ; underline-offset-<suffix>: auto | px
+    cmp r14d, 17
+    jb .not_uo
+    lea rdi, [r13]
+    lea rsi, [s_uo_prefix]
+    mov rdx, 17
+    call strncmp
+    test rax, rax
+    jnz .not_uo
+    lea rdi, [r13 + 17]
+    mov rsi, r14
+    sub rsi, 17
+    call atoi_n
+    test rax, rax
+    jnz .uo_px
+    ; "auto" (atoi gave 0)
+    mov dword [r12 + N_UO], 1
+    jmp .done
+.uo_px:
+    mov [r12 + N_UO], eax
+    jmp .done
+.not_uo:
+    ; text-transform/decoration/font-style flags
+    cmp r14d, 10
+    jne .not_cap
+    lea rdi, [r13]
+    lea rsi, [s_capitalize]
+    mov rdx, 10
+    call strncmp
+    test rax, rax
+    jnz .not_cap
+    or dword [r12 + N_FLAGS], F_CAPITALIZE
+    jmp .done
+.not_cap:
+    cmp r14d, 11
+    jne .not_ncase
+    lea rdi, [r13]
+    lea rsi, [s_normal_case]
+    mov rdx, 11
+    call strncmp
+    test rax, rax
+    jnz .not_ncase
+    or dword [r12 + N_FLAGS], F_NORMALCASE
+    jmp .done
+.not_ncase:
+    cmp r14d, 10
+    jne .not_nit
+    lea rdi, [r13]
+    lea rsi, [s_not_italic]
+    mov rdx, 10
+    call strncmp
+    test rax, rax
+    jnz .not_nit
+    or dword [r12 + N_FLAGS], F_NOTITALIC
+    jmp .done
+.not_nit:
+    cmp r14d, 8
+    jne .not_ovl
+    lea rdi, [r13]
+    lea rsi, [s_overline]
+    mov rdx, 8
+    call strncmp
+    test rax, rax
+    jnz .not_ovl
+    or dword [r12 + N_FLAGS], F_OVERLINE
+    jmp .done
+.not_ovl:
+    ; (no-underline is consumed by tw_flags -> F_NOUNDERLINE)
+.not_nund:
+    ; font-smoothing: antialiased / subpixel-antialiased
+    cmp r14d, 11
+    jne .not_anti
+    lea rdi, [r13]
+    lea rsi, [s_antialiased]
+    mov rdx, 11
+    call strncmp
+    test rax, rax
+    jnz .not_anti
+    mov dword [r12 + N_SMOOTH], 1
+    jmp .done
+.not_anti:
+    cmp r14d, 21
+    jne .not_subp
+    lea rdi, [r13]
+    lea rsi, [s_subpixel]
+    mov rdx, 21
+    call strncmp
+    test rax, rax
+    jnz .not_subp
+    mov dword [r12 + N_SMOOTH], 2
+    jmp .done
+.not_subp:
+    ; indent-<n> (spacing scale)
+    cmp r14d, 7
+    jb .not_indent
+    lea rdi, [r13]
+    lea rsi, [s_indent]
+    mov rdx, 7
+    call strncmp
+    test rax, rax
+    jnz .not_indent
+    lea rdi, [r13 + 7]
+    mov rsi, r14
+    sub rsi, 7
+    call scale_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_INDENT], eax
+    jmp .done
+.not_indent:
+    ; tab-<n> (literal number)
+    cmp r14d, 4
+    jb .not_tabsz
+    lea rdi, [r13]
+    lea rsi, [s_tab]
+    mov rdx, 4
+    call strncmp
+    test rax, rax
+    jnz .not_tabsz
+    lea rdi, [r13 + 4]
+    mov rsi, r14
+    sub rsi, 4
+    call atoi_n
+    test rax, rax
+    jz .done
+    mov [r12 + N_TABSIZE], eax
+    jmp .done
+.not_tabsz:
+    ; align-<suffix>: vertical-align
+    cmp r14d, 6
+    jb .not_valign
+    lea rdi, [r13]
+    lea rsi, [s_align]
+    mov rdx, 6
+    call strncmp
+    test rax, rax
+    jnz .not_valign
+    lea rdi, [r13 + 6]
+    mov rsi, r14
+    sub rsi, 6
+    lea rdx, [tw_valign]
+    lea rcx, [tw_valign_end]
+    call tw_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_VALIGN], eax
+    jmp .done
+.not_valign:
+    ; whitespace-<suffix>
+    cmp r14d, 11
+    jb .not_ws
+    lea rdi, [r13]
+    lea rsi, [s_whitespace]
+    mov rdx, 11
+    call strncmp
+    test rax, rax
+    jnz .not_ws
+    lea rdi, [r13 + 11]
+    mov rsi, r14
+    sub rsi, 11
+    lea rdx, [tw_ws]
+    lea rcx, [tw_ws_end]
+    call tw_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_WS], eax
+    jmp .done
+.not_ws:
+    ; break-<suffix>: word-break
+    cmp r14d, 6
+    jb .not_wb
+    lea rdi, [r13]
+    lea rsi, [s_break]
+    mov rdx, 6
+    call strncmp
+    test rax, rax
+    jnz .not_wb
+    lea rdi, [r13 + 6]
+    mov rsi, r14
+    sub rsi, 6
+    lea rdx, [tw_wbreak]
+    lea rcx, [tw_wbreak_end]
+    call tw_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_WBREAK], eax
+    jmp .done
+.not_wb:
+    ; wrap-<suffix>: overflow-wrap
+    cmp r14d, 5
+    jb .not_wrp
+    lea rdi, [r13]
+    lea rsi, [s_wrap]
+    mov rdx, 5
+    call strncmp
+    test rax, rax
+    jnz .not_wrp
+    lea rdi, [r13 + 5]
+    mov rsi, r14
+    sub rsi, 5
+    lea rdx, [tw_wrap]
+    lea rcx, [tw_wrap_end]
+    call tw_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_WBREAK], eax
+    jmp .done
+.not_wrp:
+    ; hyphens-<suffix>
+    cmp r14d, 8
+    jb .not_hyp
+    lea rdi, [r13]
+    lea rsi, [s_hyphens]
+    mov rdx, 8
+    call strncmp
+    test rax, rax
+    jnz .not_hyp
+    lea rdi, [r13 + 8]
+    mov rsi, r14
+    sub rsi, 8
+    lea rdx, [tw_hyphens]
+    lea rcx, [tw_hyphens_end]
+    call tw_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_HYPHENS], eax
+    jmp .done
+.not_hyp:
+    ; content-none
+    cmp r14d, 12
+    jne .not_cont
+    lea rdi, [r13]
+    lea rsi, [s_content_none]
+    mov rdx, 12
+    call strncmp
+    test rax, rax
+    jnz .not_cont
+    mov dword [r12 + N_CONTENT], 1
+    jmp .done
+.not_cont:
+    ; animate-<suffix>: spin/ping/pulse/bounce (none = default, no-op)
+    cmp r14d, 8
+    jb .not_anim
+    lea rdi, [r13]
+    lea rsi, [s_animate]
+    mov rdx, 8
+    call strncmp
+    test rax, rax
+    jnz .not_anim
+    lea rdi, [r13 + 8]
+    mov rsi, r14
+    sub rsi, 8
+    lea rdx, [tw_anim]
+    lea rcx, [tw_anim_end]
+    call tw_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_ANIM], eax
+    jmp .done
+.not_anim:
     ; ---- numeric prefixes ----
     ; gap-<n>
     cmp r14d, 4

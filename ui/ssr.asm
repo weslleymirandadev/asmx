@@ -844,6 +844,9 @@ ssr_css_view:
     call out_str
     lea rdi, [s_css_semi]
     call out_str
+    ; transition-none emits ONLY the property (v4 semantics)
+    cmp r10d, 2
+    je .no_trans
     lea rdi, [s_css_tdur]
     call out_str
     movzx edi, word [r13 + 28]
@@ -892,6 +895,23 @@ ssr_css_view:
     lea rdi, [s_css_ms]
     call out_str
 .no_trans:
+    ; transition-behavior (r13+33: 1 normal 2 allow-discrete)
+    movzx r10d, byte [r13 + 33]
+    test r10d, r10d
+    jz .no_tbh
+    lea rdi, [s_css_tbehav]
+    call out_str
+    cmp r10d, 2
+    jne .tbh_norm
+    lea rdi, [s_v_allow_discrete]
+    jmp .tbh_done
+.tbh_norm:
+    lea rdi, [s_v_normal]
+.tbh_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_tbh:
     ; width: (w && w < 720) ? "width:Npx;" : role ? auto : 100%
     movzx eax, word [rbx + 6]
     test eax, eax
@@ -926,6 +946,57 @@ ssr_css_view:
     lea rdi, [s_css_px_semi]
     call out_str
 .no_hh:
+    ; list-style-position (r13+52) / list-style-type (r13+53) - inherit
+    ; to the li children
+    movzx r10d, byte [r13 + 52]
+    test r10d, r10d
+    jz .no_lsp
+    lea rdi, [s_css_listpos]
+    call out_str
+    cmp r10d, 2
+    jne .lsp_in
+    lea rdi, [s_v_outside]
+    jmp .lsp_done
+.lsp_in:
+    lea rdi, [s_v_inside]
+.lsp_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_lsp:
+    movzx r10d, byte [r13 + 53]
+    test r10d, r10d
+    jz .no_lst
+    lea rdi, [s_css_listtype]
+    call out_str
+    cmp r10d, 2
+    je .lst_disc
+    cmp r10d, 3
+    je .lst_dec
+    lea rdi, [s_v_none]
+    jmp .lst_done
+.lst_disc:
+    lea rdi, [s_v_disc]
+    jmp .lst_done
+.lst_dec:
+    lea rdi, [s_v_decimal]
+.lst_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_lst:
+    ; animation (r13+32, table anim_vals)
+    movzx r10d, byte [r13 + 32]
+    test r10d, r10d
+    jz .no_animv
+    lea rdi, [s_css_anim]
+    call out_str
+    lea r11, [anim_vals]
+    mov rdi, [r11 + r10*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_animv:
 .done_css:
     pop r13
     pop r12
@@ -944,8 +1015,19 @@ ssr_css_label:
     lea rbx, [blob_buf + rax + 24]
     imul rax, r12, STYLE_REC
     lea r13, [style_buf + rax]
+    ; display: line-clamp needs the -webkit-box box model, otherwise block
+    movzx r10d, byte [r13 + 51]  ; clamp
+    test r10d, r10d
+    jz .lbl_block
+    lea rdi, [s_css_boxv]        ; "display:-webkit-box;-webkit-box-orient:vertical;"
+    call out_str
+    lea rdi, [s_css_fs2]         ; "font-size:"
+    call out_str
+    jmp .lbl_fs
+.lbl_block:
     lea rdi, [s_css_l_base]      ; "display:block;font-size:"
     call out_str
+.lbl_fs:
     movzx edi, byte [rbx + 24]   ; fs
     test edi, edi
     jnz .have_fs
@@ -962,6 +1044,69 @@ ssr_css_label:
     call ssr_hex2
     lea rdi, [s_css_semi]
     call out_str
+    ; font-family (r13+34: 1 sans 2 serif 3 mono)
+    movzx r10d, byte [r13 + 34]
+    test r10d, r10d
+    jz .no_fam
+    lea rdi, [s_css_family]
+    call out_str
+    cmp r10d, 2
+    je .fam_serif
+    cmp r10d, 3
+    je .fam_mono
+    lea rdi, [s_fam_sans]
+    jmp .fam_done
+.fam_serif:
+    lea rdi, [s_fam_serif]
+    jmp .fam_done
+.fam_mono:
+    lea rdi, [s_fam_mono]
+.fam_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_fam:
+    ; font-stretch (r13+35, table stretch_vals)
+    movzx r10d, byte [r13 + 35]
+    test r10d, r10d
+    jz .no_str
+    lea rdi, [s_css_fstr]
+    call out_str
+    lea r11, [stretch_vals]
+    mov rdi, [r11 + r10*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_str:
+    ; font-variant-numeric (r13+36, table varnum_vals)
+    movzx r10d, byte [r13 + 36]
+    test r10d, r10d
+    jz .no_vn
+    lea rdi, [s_css_varnum]
+    call out_str
+    lea r11, [varnum_vals]
+    mov rdi, [r11 + r10*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_vn:
+    ; font-smoothing (r13+58: 1 antialiased 2 subpixel)
+    movzx r10d, byte [r13 + 58]
+    test r10d, r10d
+    jz .no_sm
+    lea rdi, [s_css_smooth]
+    call out_str
+    cmp r10d, 2
+    jne .sm_anti
+    lea rdi, [s_v_subpixel]      ; "auto"
+    jmp .sm_done
+.sm_anti:
+    lea rdi, [s_v_antialiased]
+.sm_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_sm:
     ; font-weight (u16 - 100..900 fits)
     movzx eax, word [r13 + 4]
     test eax, eax
@@ -973,7 +1118,19 @@ ssr_css_label:
     lea rdi, [s_css_semi]
     call out_str
 .no_fw:
-    ; text-align
+    ; letter-spacing (r13+37, table track_vals)
+    movzx r10d, byte [r13 + 37]
+    test r10d, r10d
+    jz .no_tr
+    lea rdi, [s_css_track]
+    call out_str
+    lea r11, [track_vals]
+    mov rdi, [r11 + r10*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_tr:
+    ; text-align (1 center 2 right 3 justify 4 start 5 end)
     movzx eax, byte [r13 + 6]
     cmp eax, 1
     je .ta_c
@@ -981,6 +1138,10 @@ ssr_css_label:
     je .ta_r
     cmp eax, 3
     je .ta_j
+    cmp eax, 4
+    je .ta_s
+    cmp eax, 5
+    je .ta_e
     jmp .no_ta
 .ta_c:
     lea rdi, [s_css_ta_c]
@@ -990,10 +1151,16 @@ ssr_css_label:
     jmp .ta_done
 .ta_j:
     lea rdi, [s_css_ta_j]
+    jmp .ta_done
+.ta_s:
+    lea rdi, [s_css_ta_s]
+    jmp .ta_done
+.ta_e:
+    lea rdi, [s_css_ta_e]
 .ta_done:
     call out_str
 .no_ta:
-    ; uppercase / lowercase / italic / underline / line-through
+    ; text-transform: uppercase > lowercase > capitalize > normal-case
     mov eax, [r13]
     test eax, F_UPPER
     jz .no_tt
@@ -1007,23 +1174,128 @@ ssr_css_label:
     call out_str
 .no_lo:
     mov eax, [r13]
+    test eax, F_CAPITALIZE
+    jz .no_cap
+    lea rdi, [s_css_tcap]
+    call out_str
+.no_cap:
+    mov eax, [r13]
+    test eax, F_NORMALCASE
+    jz .no_ncase
+    lea rdi, [s_css_tnc]
+    call out_str
+.no_ncase:
+    ; font-style: italic > not-italic
+    mov eax, [r13]
     test eax, F_ITALIC
     jz .no_it
     lea rdi, [s_css_it]
     call out_str
+    jmp .no_notit
 .no_it:
+    mov eax, [r13]
+    test eax, F_NOTITALIC
+    jz .no_notit
+    lea rdi, [s_css_ni]
+    call out_str
+.no_notit:
+    ; text-decoration-line: underline > line-through > overline > none
     mov eax, [r13]
     test eax, F_UNDER
     jz .no_un
     lea rdi, [s_css_un]
     call out_str
+    jmp .no_nund
 .no_un:
     mov eax, [r13]
     test eax, F_LINE
     jz .no_ln
     lea rdi, [s_css_ln]
     call out_str
+    jmp .no_nund
 .no_ln:
+    mov eax, [r13]
+    test eax, F_OVERLINE
+    jz .no_ovl
+    lea rdi, [s_css_ovl]
+    call out_str
+    jmp .no_nund
+.no_ovl:
+    mov eax, [r13]
+    test eax, F_NOUNDERLINE
+    jz .no_nund
+    lea rdi, [s_css_nun]
+    call out_str
+.no_nund:
+    ; text-decoration-color (r13+46 u32, 0xFFFFFFFF = none)
+    mov r10d, [r13 + 46]
+    cmp r10d, -1
+    je .no_dcol
+    lea rdi, [s_css_dcolor]
+    call out_str
+    mov edi, r10d
+    call ssr_hex6
+    lea rdi, [s_css_semi]
+    call out_str
+.no_dcol:
+    ; text-decoration-style (r13+44, table dstyle_vals)
+    movzx r10d, byte [r13 + 44]
+    test r10d, r10d
+    jz .no_dst
+    lea rdi, [s_css_dstyle]
+    call out_str
+    lea r11, [dstyle_vals]
+    mov rdi, [r11 + r10*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_dst:
+    ; text-decoration-thickness (r13+45: 1 auto 2 from-font 3+ = px-2)
+    movzx r10d, byte [r13 + 45]
+    test r10d, r10d
+    jz .no_dth
+    lea rdi, [s_css_dthick]
+    call out_str
+    cmp r10d, 1
+    je .dth_auto
+    cmp r10d, 2
+    je .dth_ff
+    lea edi, [r10d - 2]
+    call ssr_dec
+    lea rdi, [s_css_px_semi]
+    call out_str
+    jmp .no_dth
+.dth_auto:
+    lea rdi, [s_v_auto]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .no_dth
+.dth_ff:
+    lea rdi, [s_v_from_font]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_dth:
+    ; text-underline-offset (r13+50: 1 auto 2+ px)
+    movzx r10d, byte [r13 + 50]
+    test r10d, r10d
+    jz .no_uo
+    lea rdi, [s_css_uo]
+    call out_str
+    cmp r10d, 1
+    je .uo_auto
+    mov edi, r10d
+    call ssr_dec
+    lea rdi, [s_css_px_semi]
+    call out_str
+    jmp .no_uo
+.uo_auto:
+    lea rdi, [s_v_auto]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_uo:
     ; margin: (mt||mb) - labels honor mt-*/mb-* like views do; ml||mr
     ; forces the 4-value form (same rule as ssr_css_view)
     movzx eax, byte [r13 + 20]   ; ml
@@ -1068,8 +1340,190 @@ ssr_css_label:
     lea rdi, [s_css_px_semi]
     call out_str
 .no_mgl:
+    ; white-space (r13+39, table ws_vals)
+    movzx r10d, byte [r13 + 39]
+    test r10d, r10d
+    jz .no_ws
+    lea rdi, [s_css_ws]
+    call out_str
+    lea r11, [ws_vals]
+    mov rdi, [r11 + r10*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_ws:
+    ; word-break / overflow-wrap (r13+40: 1..4 word-break, 5..7 overflow-wrap)
+    movzx r10d, byte [r13 + 40]
+    test r10d, r10d
+    jz .no_wb
+    cmp r10d, 2
+    je .wb_ow
+    cmp r10d, 5
+    je .wb_ow
+    cmp r10d, 6
+    je .wb_ow
+    cmp r10d, 7
+    je .wb_ow
+    lea rdi, [s_css_wb]
+    call out_str
+    cmp r10d, 3
+    je .wb_all
+    cmp r10d, 4
+    je .wb_keep
+    lea rdi, [s_v_normal]
+    jmp .wb_done
+.wb_all:
+    lea rdi, [s_v_break_all]
+    jmp .wb_done
+.wb_keep:
+    lea rdi, [s_v_keep_all]
+    jmp .wb_done
+.wb_ow:
+    lea rdi, [s_css_ow]
+    call out_str
+    cmp r10d, 7
+    je .wb_any
+    cmp r10d, 5
+    jne .wb_bw
+    lea rdi, [s_v_normal]
+    jmp .wb_done
+.wb_bw:
+    lea rdi, [s_v_break_word]
+    jmp .wb_done
+.wb_any:
+    lea rdi, [s_v_anywhere]
+.wb_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_wb:
+    ; text-overflow (r13+41: 1 ellipsis 2 clip 3 truncate combo)
+    movzx r10d, byte [r13 + 41]
+    test r10d, r10d
+    jz .no_ov
+    cmp r10d, 3
+    jne .ov_notr
+    lea rdi, [s_css_trunc]
+    call out_str
+    jmp .no_ov
+.ov_notr:
+    lea rdi, [s_css_ov]
+    call out_str
+    cmp r10d, 2
+    jne .ov_ell
+    lea rdi, [s_v_clip]
+    jmp .ov_done
+.ov_ell:
+    lea rdi, [s_v_ellipsis]
+.ov_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_ov:
+    ; text-wrap (r13+57, table tw_vals)
+    movzx r10d, byte [r13 + 57]
+    test r10d, r10d
+    jz .no_tw
+    lea rdi, [s_css_tw]
+    call out_str
+    lea r11, [tw_vals]
+    mov rdi, [r11 + r10*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_tw:
+    ; vertical-align (r13+42, table valign_vals)
+    movzx r10d, byte [r13 + 42]
+    test r10d, r10d
+    jz .no_va
+    lea rdi, [s_css_valign]
+    call out_str
+    lea r11, [valign_vals]
+    mov rdi, [r11 + r10*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_va:
+    ; text-indent (r13+43 px)
+    movzx r10d, byte [r13 + 43]
+    test r10d, r10d
+    jz .no_ind
+    lea rdi, [s_css_indent]
+    call out_str
+    mov edi, r10d
+    call ssr_dec
+    lea rdi, [s_css_px_semi]
+    call out_str
+.no_ind:
+    ; hyphens (r13+54, table hyphens_vals)
+    movzx r10d, byte [r13 + 54]
+    test r10d, r10d
+    jz .no_hyp
+    lea rdi, [s_css_hyphens]
+    call out_str
+    lea r11, [hyphens_vals]
+    mov rdi, [r11 + r10*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_hyp:
+    ; tab-size (r13+55, plain number)
+    movzx r10d, byte [r13 + 55]
+    test r10d, r10d
+    jz .no_tab
+    lea rdi, [s_css_tab]
+    call out_str
+    mov edi, r10d
+    call ssr_dec
+    lea rdi, [s_css_semi]
+    call out_str
+.no_tab:
+    ; line-clamp (r13+51): -webkit-line-clamp:N;overflow:hidden;
+    movzx r10d, byte [r13 + 51]
+    test r10d, r10d
+    jz .no_cl
+    lea rdi, [s_css_clamp1]
+    call out_str
+    mov edi, r10d
+    call ssr_dec
+    lea rdi, [s_css_clamp2]
+    call out_str
+.no_cl:
+    ; content:none
+    movzx eax, byte [r13 + 56]
+    test eax, eax
+    jz .no_cont
+    lea rdi, [s_css_contn]
+    call out_str
+.no_cont:
+    ; animation (r13+32, table anim_vals)
+    movzx r10d, byte [r13 + 32]
+    test r10d, r10d
+    jz .no_anim
+    lea rdi, [s_css_anim]
+    call out_str
+    lea r11, [anim_vals]
+    mov rdi, [r11 + r10*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+.no_anim:
+    ; line-height: leading value or the default 1.4
+    movzx r10d, byte [r13 + 38]
+    test r10d, r10d
+    jz .no_lead
+    lea rdi, [s_css_lhp]
+    call out_str
+    lea r11, [lead_vals]
+    mov rdi, [r11 + r10*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .lh_done
+.no_lead:
     lea rdi, [s_css_lh]          ; "line-height:1.4;"
     call out_str
+.lh_done:
     pop r13
     pop r12
     pop rbx

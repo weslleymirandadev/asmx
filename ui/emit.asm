@@ -87,6 +87,7 @@ emit_shell:
     ; the glue writes during hydration (specificity of the attribute
     ; selector is the same, importance is what breaks the tie).
     call emit_variants
+    call emit_animations
     ; --- the glue script (hydration happens in the browser) ---
     lea rdi, [s_sh6]
     call out_str
@@ -530,6 +531,64 @@ build_style_records:
     mov [rdi + 28], ax
     movzx eax, word [rbx + N_DELAY]
     mov [rdi + 30], ax
+    ; typography + animation (2026-08-20): +32 anim +33 tbehav +34 family
+    ; +35 stretch +36 varnum +37 tracking +38 leading +39 whitespace
+    ; +40 wordbreak +41 overflow +42 valign +43 indent +44 deco_style
+    ; +45 deco_thick +46 deco_color u32 +50 uo +51 clamp +52 list_pos
+    ; +53 list_type +54 hyphens +55 tab_size +56 content +57 textwrap
+    ; +58 smoothing
+    movzx eax, byte [rbx + N_ANIM]
+    mov [rdi + 32], al
+    movzx eax, byte [rbx + N_TBEHAV]
+    mov [rdi + 33], al
+    movzx eax, byte [rbx + N_FAMILY]
+    mov [rdi + 34], al
+    movzx eax, byte [rbx + N_STRETCH]
+    mov [rdi + 35], al
+    movzx eax, byte [rbx + N_VARNUM]
+    mov [rdi + 36], al
+    movzx eax, byte [rbx + N_TRACK]
+    mov [rdi + 37], al
+    movzx eax, byte [rbx + N_LEAD]
+    mov [rdi + 38], al
+    movzx eax, byte [rbx + N_WS]
+    mov [rdi + 39], al
+    movzx eax, byte [rbx + N_WBREAK]
+    mov [rdi + 40], al
+    movzx eax, byte [rbx + N_OVERFLOW]
+    mov [rdi + 41], al
+    movzx eax, byte [rbx + N_VALIGN]
+    mov [rdi + 42], al
+    movzx eax, byte [rbx + N_INDENT]
+    mov [rdi + 43], al
+    movzx eax, byte [rbx + N_DSTYLE]
+    mov [rdi + 44], al
+    movzx eax, byte [rbx + N_DTHICK]
+    mov [rdi + 45], al
+    mov eax, [rbx + N_DCOLOR]
+    test eax, eax
+    jnz .have_dcol
+    mov eax, -1              ; 0 = unset -> 0xFFFFFFFF sentinel (none)
+.have_dcol:
+    mov [rdi + 46], eax
+    movzx eax, byte [rbx + N_UO]
+    mov [rdi + 50], al
+    movzx eax, byte [rbx + N_CLAMP]
+    mov [rdi + 51], al
+    movzx eax, byte [rbx + N_LISTPOS]
+    mov [rdi + 52], al
+    movzx eax, byte [rbx + N_LISTTYPE]
+    mov [rdi + 53], al
+    movzx eax, byte [rbx + N_HYPHENS]
+    mov [rdi + 54], al
+    movzx eax, byte [rbx + N_TABSIZE]
+    mov [rdi + 55], al
+    movzx eax, byte [rbx + N_CONTENT]
+    mov [rdi + 56], al
+    movzx eax, byte [rbx + N_TWRAP]
+    mov [rdi + 57], al
+    movzx eax, byte [rbx + N_SMOOTH]
+    mov [rdi + 58], al
     inc r13
     jmp .sloop
 .sloop_done:
@@ -1158,6 +1217,84 @@ emit_variants:
     pop rbx
     ret
 
+; emit_animations - <style data-asx-anim> with ONLY the @keyframes actually
+; used (nodes with N_ANIM set + variant entries changing N_ANIM). SSR-only
+; like the variants block; the glue never touches it.
+emit_animations:
+    push rbx
+    push r12
+    push r13
+    xor r12d, r12d           ; used bits (spin=1 ping=2 pulse=4 bounce=8)
+    xor r13, r13
+.aloop:
+    cmp r13, [rec_count]
+    jge .avars
+    imul rax, r13, 12
+    mov eax, [rec_order + rax + 4]   ; node idx
+    imul rax, rax, NODE_SIZE
+    mov eax, [nodes + rax + N_ANIM]
+    test eax, eax
+    jz .anext
+    dec eax
+    mov cl, al
+    mov edx, 1
+    shl edx, cl
+    or r12d, edx
+.anext:
+    inc r13
+    jmp .aloop
+.avars:
+    ; variant entries may animate too (e.g. hover:animate-spin)
+    xor r13, r13
+.aloop2:
+    cmp r13, [variant_count]
+    jge .have_used
+    imul rax, r13, VAR_ENTRY
+    cmp dword [variant_tab + rax + V_FIELD], N_ANIM
+    jne .anext2
+    mov eax, [variant_tab + rax + V_VALUE]
+    dec eax
+    mov cl, al
+    mov edx, 1
+    shl edx, cl
+    or r12d, edx
+.anext2:
+    inc r13
+    jmp .aloop2
+.have_used:
+    test r12d, r12d
+    jz .done
+    lea rdi, [s_anim_open]
+    call out_str
+    test r12d, 1
+    jz .nospin
+    lea rdi, [s_kf_spin]
+    call out_str
+.nospin:
+    test r12d, 2
+    jz .noping
+    lea rdi, [s_kf_ping]
+    call out_str
+.noping:
+    test r12d, 4
+    jz .nopulse
+    lea rdi, [s_kf_pulse]
+    call out_str
+.nopulse:
+    test r12d, 8
+    jz .nobounce
+    lea rdi, [s_kf_bounce]
+    call out_str
+.nobounce:
+    lea rdi, [s_anim_close]
+    call out_str
+    call ssr_nl
+.done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
 ; variant_bp_width(bp id) -> min-width px
 variant_bp_width:
     cmp rdi, 1
@@ -1397,6 +1534,352 @@ emit_var_prop:
     call out_str
     jmp .done
 .not_delay:
+    cmp r12d, N_ANIM
+    jne .not_animv
+    lea rdi, [s_css_anim]
+    call out_str
+    lea r11, [anim_vals]
+    mov rdi, [r11 + r13*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_animv:
+    cmp r12d, N_TBEHAV
+    jne .not_tbhv
+    lea rdi, [s_css_tbehav]
+    call out_str
+    cmp r13d, 2
+    jne .tbv_norm
+    lea rdi, [s_v_allow_discrete]
+    jmp .tbv_done
+.tbv_norm:
+    lea rdi, [s_v_normal]
+.tbv_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_tbhv:
+    cmp r12d, N_FAMILY
+    jne .not_famv
+    lea rdi, [s_css_family]
+    call out_str
+    lea r11, [fam_vals]
+    mov rdi, [r11 + r13*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_famv:
+    cmp r12d, N_STRETCH
+    jne .not_strv
+    lea rdi, [s_css_fstr]
+    call out_str
+    lea r11, [stretch_vals]
+    mov rdi, [r11 + r13*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_strv:
+    cmp r12d, N_VARNUM
+    jne .not_vnv
+    lea rdi, [s_css_varnum]
+    call out_str
+    lea r11, [varnum_vals]
+    mov rdi, [r11 + r13*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_vnv:
+    cmp r12d, N_SMOOTH
+    jne .not_smv
+    lea rdi, [s_css_smooth]
+    call out_str
+    cmp r13d, 2
+    jne .smv_anti
+    lea rdi, [s_v_subpixel]
+    jmp .smv_done
+.smv_anti:
+    lea rdi, [s_v_antialiased]
+.smv_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_smv:
+    cmp r12d, N_TRACK
+    jne .not_trkv
+    lea rdi, [s_css_track]
+    call out_str
+    lea r11, [track_vals]
+    mov rdi, [r11 + r13*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_trkv:
+    cmp r12d, N_LEAD
+    jne .not_ldv
+    lea rdi, [s_css_lhp]
+    call out_str
+    lea r11, [lead_vals]
+    mov rdi, [r11 + r13*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_ldv:
+    cmp r12d, N_WS
+    jne .not_wsv
+    lea rdi, [s_css_ws]
+    call out_str
+    lea r11, [ws_vals]
+    mov rdi, [r11 + r13*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_wsv:
+    cmp r12d, N_WBREAK
+    jne .not_wbv
+    cmp r13d, 2
+    je .wbv_ow
+    cmp r13d, 5
+    je .wbv_ow
+    cmp r13d, 6
+    je .wbv_ow
+    cmp r13d, 7
+    je .wbv_ow
+    lea rdi, [s_css_wb]
+    call out_str
+    cmp r13d, 3
+    je .wbv_all
+    cmp r13d, 4
+    je .wbv_keep
+    lea rdi, [s_v_normal]
+    jmp .wbv_done
+.wbv_all:
+    lea rdi, [s_v_break_all]
+    jmp .wbv_done
+.wbv_keep:
+    lea rdi, [s_v_keep_all]
+    jmp .wbv_done
+.wbv_ow:
+    lea rdi, [s_css_ow]
+    call out_str
+    cmp r13d, 7
+    je .wbv_any
+    cmp r13d, 5
+    jne .wbv_bw
+    lea rdi, [s_v_normal]
+    jmp .wbv_done
+.wbv_bw:
+    lea rdi, [s_v_break_word]
+    jmp .wbv_done
+.wbv_any:
+    lea rdi, [s_v_anywhere]
+.wbv_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_wbv:
+    cmp r12d, N_OVERFLOW
+    jne .not_ovv
+    cmp r13d, 3
+    jne .ovv_notr
+    lea rdi, [s_css_trunc]
+    call out_str
+    jmp .done
+.ovv_notr:
+    lea rdi, [s_css_ov]
+    call out_str
+    cmp r13d, 2
+    jne .ovv_ell
+    lea rdi, [s_v_clip]
+    jmp .ovv_done
+.ovv_ell:
+    lea rdi, [s_v_ellipsis]
+.ovv_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_ovv:
+    cmp r12d, N_VALIGN
+    jne .not_vav
+    lea rdi, [s_css_valign]
+    call out_str
+    lea r11, [valign_vals]
+    mov rdi, [r11 + r13*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_vav:
+    cmp r12d, N_INDENT
+    jne .not_indv
+    lea rdi, [s_css_indent]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_css_px_semi]
+    call out_str
+    jmp .done
+.not_indv:
+    cmp r12d, N_DSTYLE
+    jne .not_dstv
+    lea rdi, [s_css_dstyle]
+    call out_str
+    lea r11, [dstyle_vals]
+    mov rdi, [r11 + r13*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_dstv:
+    cmp r12d, N_DTHICK
+    jne .not_dthv
+    lea rdi, [s_css_dthick]
+    call out_str
+    cmp r13d, 1
+    je .dthv_auto
+    cmp r13d, 2
+    je .dthv_ff
+    lea edi, [r13d - 2]
+    call ssr_dec
+    lea rdi, [s_css_px_semi]
+    call out_str
+    jmp .done
+.dthv_auto:
+    lea rdi, [s_v_auto]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.dthv_ff:
+    lea rdi, [s_v_from_font]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_dthv:
+    cmp r12d, N_DCOLOR
+    jne .not_dclv
+    lea rdi, [s_css_dcolor]
+    call out_str
+    mov rdi, r13
+    call ssr_hex6
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_dclv:
+    cmp r12d, N_UO
+    jne .not_uov
+    lea rdi, [s_css_uo]
+    call out_str
+    cmp r13d, 1
+    je .uov_auto
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_css_px_semi]
+    call out_str
+    jmp .done
+.uov_auto:
+    lea rdi, [s_v_auto]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_uov:
+    cmp r12d, N_CLAMP
+    jne .not_clv
+    lea rdi, [s_css_clamp1]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_css_clamp2]
+    call out_str
+    jmp .done
+.not_clv:
+    cmp r12d, N_LISTPOS
+    jne .not_lspv
+    lea rdi, [s_css_listpos]
+    call out_str
+    cmp r13d, 2
+    jne .lspv_in
+    lea rdi, [s_v_outside]
+    jmp .lspv_done
+.lspv_in:
+    lea rdi, [s_v_inside]
+.lspv_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_lspv:
+    cmp r12d, N_LISTTYPE
+    jne .not_lstv
+    lea rdi, [s_css_listtype]
+    call out_str
+    cmp r13d, 2
+    je .lstv_disc
+    cmp r13d, 3
+    je .lstv_dec
+    lea rdi, [s_v_none]
+    jmp .lstv_done
+.lstv_disc:
+    lea rdi, [s_v_disc]
+    jmp .lstv_done
+.lstv_dec:
+    lea rdi, [s_v_decimal]
+.lstv_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_lstv:
+    cmp r12d, N_HYPHENS
+    jne .not_hyv
+    lea rdi, [s_css_hyphens]
+    call out_str
+    lea r11, [hyphens_vals]
+    mov rdi, [r11 + r13*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_hyv:
+    cmp r12d, N_TABSIZE
+    jne .not_tbv2
+    lea rdi, [s_css_tab]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_tbv2:
+    cmp r12d, N_CONTENT
+    jne .not_ctv
+    lea rdi, [s_css_contn]
+    call out_str
+    jmp .done
+.not_ctv:
+    cmp r12d, N_TWRAP
+    jne .not_twv
+    lea rdi, [s_css_tw]
+    call out_str
+    lea r11, [tw_vals]
+    mov rdi, [r11 + r13*8 - 8]
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_twv:
     cmp r12d, N_W
     jne .not_w
     lea rdi, [s_var_w]

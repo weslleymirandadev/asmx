@@ -888,7 +888,7 @@ tw_flags:
     dq s_italic, F_ITALIC
     dq s_underline, F_UNDER
     dq s_line_through, F_LINE
-    dq s_no_underline, 0
+    dq s_no_underline, F_NOUNDERLINE
     dq s_bold, F_BOLD
     dq s_semibold, F_BOLD
 tw_flags_end:
@@ -943,6 +943,30 @@ var_fields:
     dd N_EASE, 4
     dd N_DUR, 4
     dd N_DELAY, 4
+    dd N_ANIM, 4
+    dd N_TBEHAV, 4
+    dd N_FAMILY, 4
+    dd N_STRETCH, 4
+    dd N_VARNUM, 4
+    dd N_TRACK, 4
+    dd N_LEAD, 4
+    dd N_WS, 4
+    dd N_WBREAK, 4
+    dd N_OVERFLOW, 4
+    dd N_VALIGN, 4
+    dd N_INDENT, 4
+    dd N_DSTYLE, 4
+    dd N_DTHICK, 4
+    dd N_DCOLOR, 4
+    dd N_UO, 4
+    dd N_CLAMP, 4
+    dd N_LISTPOS, 4
+    dd N_LISTTYPE, 4
+    dd N_HYPHENS, 4
+    dd N_TABSIZE, 4
+    dd N_CONTENT, 4
+    dd N_TWRAP, 4
+    dd N_SMOOTH, 4
     dd N_GRID_COLS, 1
 var_fields_end:
 
@@ -1061,6 +1085,172 @@ tw_ease:
     dq s_e_out, 3
     dq s_e_inout, 4
 tw_ease_end:
+
+; typography/animation suffix tables (2026-08-20)
+s_c_sans   db "sans", 0
+s_c_serif  db "serif", 0
+s_c_mono   db "mono", 0
+tw_family:
+    dq s_c_sans, 1
+    dq s_c_serif, 2
+    dq s_c_mono, 3
+tw_family_end:
+
+tw_stretch:
+    dq s_v_uc, 1
+    dq s_v_ec, 2
+    dq s_v_cd, 3
+    dq s_v_sc, 4
+    dq s_v_normal, 5
+    dq s_v_se, 6
+    dq s_v_ex, 7
+    dq s_v_ee, 8
+    dq s_v_ue, 9
+tw_stretch_end:
+
+tw_varnum:
+    dq s_v_normal, 1
+    dq s_v_ordinal, 2
+    dq s_v_slashed_zero, 3
+    dq s_v_lining_nums, 4
+    dq s_v_oldstyle_nums, 5
+    dq s_v_proportional_nums, 6
+    dq s_v_tabular_nums, 7
+    dq s_v_diagonal_fractions, 8
+    dq s_v_stacked_fractions, 9
+tw_varnum_end:
+
+s_tk_tighter db "tighter", 0
+s_tk_tight   db "tight", 0
+s_tk_normal  db "normal", 0
+s_tk_wide    db "wide", 0
+s_tk_wider   db "wider", 0
+s_tk_widest  db "widest", 0
+tw_tracking:
+    dq s_tk_tighter, 1
+    dq s_tk_tight, 2
+    dq s_tk_normal, 3
+    dq s_tk_wide, 4
+    dq s_tk_wider, 5
+    dq s_tk_widest, 6
+tw_tracking_end:
+
+s_ld_c_none   db "none", 0
+s_ld_c_tight  db "tight", 0
+s_ld_c_snug   db "snug", 0
+s_ld_c_normal db "normal", 0
+s_ld_c_relaxed db "relaxed", 0
+s_ld_c_loose  db "loose", 0
+tw_leading:
+    dq s_ld_c_none, 1
+    dq s_ld_c_tight, 2
+    dq s_ld_c_snug, 3
+    dq s_ld_c_normal, 4
+    dq s_ld_c_relaxed, 5
+    dq s_ld_c_loose, 6
+tw_leading_end:
+
+s_v_words  db "words", 0
+s_v_keep   db "keep", 0
+tw_ws:
+    dq s_v_normal, 1
+    dq s_v_nowrap, 2
+    dq s_v_pre, 3
+    dq s_v_pre_line, 4
+    dq s_v_pre_wrap, 5
+    dq s_v_break_spaces, 6
+tw_ws_end:
+
+tw_wbreak:
+    dq s_v_normal, 1
+    dq s_v_words, 2
+    dq s_v_break_all, 3
+    dq s_v_keep, 4
+tw_wbreak_end:
+
+tw_wrap:
+    dq s_v_normal, 5
+    dq s_v_break_word, 6
+    dq s_v_anywhere, 7
+tw_wrap_end:
+
+tw_overflow:
+    dq s_v_ellipsis, 1
+    dq s_v_clip, 2
+tw_overflow_end:
+
+tw_tw:
+    dq s_v_wrap, 1
+    dq s_v_nowrap, 2
+    dq s_v_balance, 3
+    dq s_v_pretty, 4
+tw_tw_end:
+
+s_v_baseline db "baseline", 0
+tw_valign:
+    dq s_v_baseline, 1
+    dq s_v_top, 2
+    dq s_v_middle, 3
+    dq s_v_bottom, 4
+    dq s_v_text_top, 5
+    dq s_v_text_bottom, 6
+    dq s_v_sub, 7
+    dq s_v_super, 8
+tw_valign_end:
+
+tw_decostyle:
+    dq s_v_solid, 1
+    dq s_v_double, 2
+    dq s_v_dotted, 3
+    dq s_v_dashed, 4
+    dq s_v_wavy, 5
+tw_decostyle_end:
+
+tw_dthick:
+    dq s_v_auto, 1
+    dq s_v_from_font, 2
+tw_dthick_end:
+
+tw_listtype:
+    dq s_v_none, 1
+    dq s_v_disc, 2
+    dq s_v_decimal, 3
+tw_listtype_end:
+
+tw_hyphens:
+    dq s_v_none, 1
+    dq s_v_manual, 2
+    dq s_v_auto, 3
+tw_hyphens_end:
+
+s_c_spin  db "spin", 0
+s_c_ping  db "ping", 0
+s_c_pulse db "pulse", 0
+s_c_bounce db "bounce", 0
+tw_anim:
+    dq s_c_spin, 1
+    dq s_c_ping, 2
+    dq s_c_pulse, 3
+    dq s_c_bounce, 4
+tw_anim_end:
+
+tw_tbehav:
+    dq s_v_normal, 1
+    dq s_v_allow_discrete, 2
+tw_tbehav_end:
+
+; value pointer tables for the SSR/glue label css (1-based ids)
+lead_vals:      dq s_ld_none, s_ld_tight, s_ld_snug, s_ld_normal, s_ld_relaxed, s_ld_loose, s_ld_3, s_ld_4, s_ld_5, s_ld_6, s_ld_7, s_ld_8, s_ld_9, s_ld_10
+track_vals:     dq s_tr_tighter, s_tr_tight, s_tr_normal, s_tr_wide, s_tr_wider, s_tr_widest
+stretch_vals:   dq s_v_uc, s_v_ec, s_v_cd, s_v_sc, s_v_normal, s_v_se, s_v_ex, s_v_ee, s_v_ue
+varnum_vals:    dq s_v_normal, s_v_ordinal, s_v_slashed_zero, s_v_lining_nums, s_v_oldstyle_nums, s_v_proportional_nums, s_v_tabular_nums, s_v_diagonal_fractions, s_v_stacked_fractions
+ws_vals:        dq s_v_normal, s_v_nowrap, s_v_pre, s_v_pre_line, s_v_pre_wrap, s_v_break_spaces
+valign_vals:    dq s_v_normal, s_v_top, s_v_middle, s_v_bottom, s_v_text_top, s_v_text_bottom, s_v_sub, s_v_super
+dstyle_vals:    dq s_v_solid, s_v_double, s_v_dotted, s_v_dashed, s_v_wavy
+tw_vals:        dq s_v_wrap, s_v_nowrap, s_v_balance, s_v_pretty
+hyphens_vals:   dq s_v_none, s_v_manual, s_v_auto
+anim_vals:      dq s_anim_spin, s_anim_ping, s_anim_pulse, s_anim_bounce
+fam_vals:       dq s_fam_sans, s_fam_serif, s_fam_mono
 
 ; prefixes for numeric classes (strncmp match on the prefix)
 s_gap_prefix   db "gap-", 0

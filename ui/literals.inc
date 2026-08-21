@@ -392,32 +392,204 @@ s_css_tdur    db "transition-duration:", 0
 s_css_tfn     db "transition-timing-function:", 0
 s_css_tdelay  db "transition-delay:", 0
 s_css_ms      db "ms;", 0
-s_tp_default  db "color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter", 0
+s_tp_default  db "color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events", 0
 s_tp_none     db "none", 0
 s_tp_all      db "all", 0
-s_tp_colors   db "color,background-color,border-color,text-decoration-color,fill,stroke", 0
+s_tp_colors   db "color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to", 0
 s_tp_opacity  db "opacity", 0
 s_tp_shadow   db "box-shadow", 0
-s_tp_transform db "transform", 0
+s_tp_transform db "transform,translate,scale,rotate", 0
 s_ease_linear db "linear", 0
 s_ease_in     db "cubic-bezier(0.4,0,1,1)", 0
 s_ease_out    db "cubic-bezier(0,0,0.2,1)", 0
 s_ease_inout  db "cubic-bezier(0.4,0,0.2,1)", 0
+
+; ---- typography/animation class prefixes (2026-08-20) ----
+s_font_stretch db "font-stretch-", 0
+s_tracking   db "tracking-", 0
+s_leading    db "leading-", 0
+s_line_clamp db "line-clamp-", 0
+s_decoration db "decoration-", 0
+s_uo_prefix  db "underline-offset-", 0
+s_indent     db "indent-", 0
+s_tab        db "tab-", 0
+s_align      db "align-", 0
+s_whitespace db "whitespace-", 0
+s_break      db "break-", 0
+s_wrap       db "wrap-", 0
+s_hyphens    db "hyphens-", 0
+s_animate    db "animate-", 0
+s_tbehav_prefix db "transition-behavior-", 0
+s_content_none db "content-none", 0
+; exact class literals (typography)
+s_list_inside db "list-inside", 0
+s_list_outside db "list-outside", 0
+s_list_none  db "list-none", 0
+s_list_disc  db "list-disc", 0
+s_list_decimal db "list-decimal", 0
+s_text_start db "text-start", 0
+s_text_end   db "text-end", 0
+s_truncate   db "truncate", 0
+s_text_ellipsis db "text-ellipsis", 0
+s_text_clip  db "text-clip", 0
+s_text_wrap  db "text-wrap", 0
+s_text_nowrap db "text-nowrap", 0
+s_text_balance db "text-balance", 0
+s_text_pretty db "text-pretty", 0
+s_capitalize db "capitalize", 0
+s_normal_case db "normal-case", 0
+s_not_italic db "not-italic", 0
+s_overline   db "overline", 0
+s_antialiased db "antialiased", 0
+s_subpixel   db "subpixel-antialiased", 0
+
+; ---- typography css (mirrored in wasm/glue.asm) ----
+s_css_family db "font-family:", 0
+s_fam_sans   db 'ui-sans-serif,system-ui,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji"', 0
+s_fam_serif  db 'ui-serif,Georgia,Cambria,"Times New Roman",Times,serif', 0
+s_fam_mono   db 'ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace', 0
+s_css_fstr   db "font-stretch:", 0
+s_css_varnum db "font-variant-numeric:", 0
+s_css_smooth db "-webkit-font-smoothing:", 0
+s_css_track  db "letter-spacing:", 0
+s_css_lhp    db "line-height:", 0
+s_css_ws     db "white-space:", 0
+s_css_wb     db "word-break:", 0
+s_css_ow     db "overflow-wrap:", 0
+s_css_ov     db "text-overflow:", 0
+s_css_trunc  db "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", 0
+s_css_tw     db "text-wrap:", 0
+s_css_valign db "vertical-align:", 0
+s_css_indent db "text-indent:", 0
+s_css_dstyle db "text-decoration-style:", 0
+s_css_dthick db "text-decoration-thickness:", 0
+s_css_dcolor db "text-decoration-color:#", 0
+s_css_uo     db "text-underline-offset:", 0
+s_css_clamp1 db "-webkit-line-clamp:", 0
+s_css_clamp2 db ";overflow:hidden;", 0
+s_css_boxv   db "display:-webkit-box;-webkit-box-orient:vertical;", 0
+s_css_hyphens db "hyphens:", 0
+s_css_tab    db "tab-size:", 0
+s_css_contn  db "content:none;", 0
+s_css_anim   db "animation:", 0
+s_anim_spin  db "spin 1s linear infinite", 0
+s_anim_ping  db "ping 1s cubic-bezier(0,0,0.2,1) infinite", 0
+s_anim_pulse db "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite", 0
+s_anim_bounce db "bounce 1s infinite", 0
+s_css_tbehav db "transition-behavior:", 0
+
+; shared value words (reused across properties)
+s_v_normal   db "normal", 0
+s_v_none     db "none", 0
+s_v_auto     db "auto", 0
+s_v_wrap     db "wrap", 0
+s_v_nowrap   db "nowrap", 0
+s_v_balance  db "balance", 0
+s_v_pretty   db "pretty", 0
+s_v_pre      db "pre", 0
+s_v_pre_line db "pre-line", 0
+s_v_pre_wrap db "pre-wrap", 0
+s_v_break_spaces db "break-spaces", 0
+s_v_top      db "top", 0
+s_v_middle   db "middle", 0
+s_v_bottom   db "bottom", 0
+s_v_text_top db "text-top", 0
+s_v_text_bottom db "text-bottom", 0
+s_v_sub      db "sub", 0
+s_v_super    db "super", 0
+s_v_solid    db "solid", 0
+s_v_double   db "double", 0
+s_v_dotted   db "dotted", 0
+s_v_dashed   db "dashed", 0
+s_v_wavy     db "wavy", 0
+s_v_inside   db "inside", 0
+s_v_outside  db "outside", 0
+s_v_disc     db "disc", 0
+s_v_decimal  db "decimal", 0
+s_v_manual   db "manual", 0
+s_v_ellipsis db "ellipsis", 0
+s_v_clip     db "clip", 0
+s_v_from_font db "from-font", 0
+s_v_antialiased db "antialiased", 0
+s_v_ordinal  db "ordinal", 0
+s_v_slashed_zero db "slashed-zero", 0
+s_v_lining_nums db "lining-nums", 0
+s_v_oldstyle_nums db "oldstyle-nums", 0
+s_v_proportional_nums db "proportional-nums", 0
+s_v_tabular_nums db "tabular-nums", 0
+s_v_diagonal_fractions db "diagonal-fractions", 0
+s_v_stacked_fractions db "stacked-fractions", 0
+s_v_uc db "ultra-condensed", 0
+s_v_ec db "extra-condensed", 0
+s_v_cd db "condensed", 0
+s_v_sc db "semi-condensed", 0
+s_v_se db "semi-expanded", 0
+s_v_ex db "expanded", 0
+s_v_ee db "extra-expanded", 0
+s_v_ue db "ultra-expanded", 0
+s_v_break_all db "break-all", 0
+s_v_keep_all db "keep-all", 0
+s_v_anywhere db "anywhere", 0
+s_v_break_word db "break-word", 0
+s_v_allow_discrete db "allow-discrete", 0
+s_v_subpixel db "auto", 0
+
+; tracking letter-spacing values
+s_tr_tighter db "-0.05em", 0
+s_tr_tight   db "-0.025em", 0
+s_tr_normal  db "0em", 0
+s_tr_wide    db "0.025em", 0
+s_tr_wider   db "0.05em", 0
+s_tr_widest  db "0.1em", 0
+
+; leading line-height values
+s_ld_none    db "1", 0
+s_ld_tight   db "1.25", 0
+s_ld_snug    db "1.375", 0
+s_ld_normal  db "1.5", 0
+s_ld_relaxed db "1.625", 0
+s_ld_loose   db "2", 0
+s_ld_3       db "0.75rem", 0
+s_ld_4       db "1rem", 0
+s_ld_5       db "1.25rem", 0
+s_ld_6       db "1.5rem", 0
+s_ld_7       db "1.75rem", 0
+s_ld_8       db "2rem", 0
+s_ld_9       db "2.25rem", 0
+s_ld_10      db "2.5rem", 0
+
+; animation keyframes (emitted SSR-only in <style data-asx-anim>)
+s_anim_open  db '<style data-asx-anim>', 0
+s_kf_spin    db '@keyframes spin{to{transform:rotate(360deg)}}', 0
+s_kf_ping    db '@keyframes ping{75%,100%{transform:scale(2);opacity:0}}', 0
+s_kf_pulse   db '@keyframes pulse{50%{opacity:.5}}', 0
+s_kf_bounce  db '@keyframes bounce{0%,100%{transform:translateY(-25%);animation-timing-function:cubic-bezier(.8,0,1,1)}50%{transform:none;animation-timing-function:cubic-bezier(0,0,.2,1)}}', 0
+s_anim_close db '</style>', 0
 s_css_w       db "width:", 0
 s_css_btn     db "width:auto;align-self:flex-start;cursor:pointer;", 0
 s_css_100     db "width:100%;min-width:0;", 0
 s_css_mh      db "min-height:", 0
 s_css_l_base  db "display:block;font-size:", 0
+s_css_fs2     db "font-size:", 0
 s_css_l_col   db "px;color:#", 0
 s_css_fw      db "font-weight:", 0
 s_css_ta_c    db "text-align:center;", 0
 s_css_ta_r    db "text-align:right;", 0
 s_css_ta_j    db "text-align:justify;", 0
+s_css_ta_s    db "text-align:start;", 0
+s_css_ta_e    db "text-align:end;", 0
 s_css_tt      db "text-transform:uppercase;", 0
 s_css_lo      db "text-transform:lowercase;", 0
+s_css_tcap    db "text-transform:capitalize;", 0
+s_css_tnc     db "text-transform:none;", 0
 s_css_it      db "font-style:italic;", 0
+s_css_ni      db "font-style:normal;", 0
 s_css_un      db "text-decoration:underline;", 0
 s_css_ln      db "text-decoration:line-through;", 0
+s_css_ovl     db "text-decoration-line:overline;", 0
+s_css_nun     db "text-decoration-line:none;", 0
+s_css_listpos db "list-style-position:", 0
+s_css_listtype db "list-style-type:", 0
 s_css_lh      db "line-height:1.4;", 0
 s_css_cv_base db "display:block;width:", 0
 s_css_cv_h    db "height:", 0

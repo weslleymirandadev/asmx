@@ -119,13 +119,41 @@
                                      ; 3 out, 4 in-out
 %define N_DUR        152             ; u32 transition-duration ms (duration-*)
 %define N_DELAY      156             ; u32 transition-delay ms (delay-*)
+; typography + animation fields (2026-08-20; NODE_SIZE 256 has room)
+%define N_ANIM       160             ; u32 animation: 0 none, 1 spin, 2 ping, 3 pulse, 4 bounce
+%define N_TBEHAV     164             ; u32 transition-behavior: 0 none, 1 normal, 2 allow-discrete
+%define N_FAMILY     168             ; u32 font-family: 0 none, 1 sans, 2 serif, 3 mono
+%define N_STRETCH    172             ; u32 font-stretch: 0 none, 1..9 (ultra-condensed..ultra-expanded)
+%define N_VARNUM     176             ; u32 font-variant-numeric: 0 none, 1..9
+%define N_TRACK      180             ; u32 letter-spacing: 0 none, 1..6 (tighter..widest)
+%define N_LEAD       184             ; u32 line-height: 0 none, 1..6 named, 7..14 = leading-3..10
+%define N_WS         188             ; u32 white-space: 0 none, 1..6
+%define N_WBREAK     192             ; u32 word-break/overflow-wrap: 0 none, 1..7
+%define N_OVERFLOW   196             ; u32 text-overflow: 0 none, 1 ellipsis, 2 clip, 3 truncate
+%define N_VALIGN     200             ; u32 vertical-align: 0 none, 1..8
+%define N_INDENT     204             ; u32 text-indent px (indent-*)
+%define N_DSTYLE     208             ; u32 text-decoration-style: 0 none, 1..5
+%define N_DTHICK     212             ; u32 text-decoration-thickness: 0 none, 1 auto, 2 from-font, 3+ px
+%define N_DCOLOR     216             ; u32 text-decoration-color (0xFFFFFFFF = none)
+%define N_UO         220             ; u32 text-underline-offset: 0 none, 1 auto, 2+ px
+%define N_CLAMP      224             ; u32 line-clamp: 0 none, 1..6
+%define N_LISTPOS    228             ; u32 list-style-position: 0 none, 1 inside, 2 outside
+%define N_LISTTYPE   232             ; u32 list-style-type: 0 none, 1 none, 2 disc, 3 decimal
+%define N_HYPHENS    236             ; u32 hyphens: 0 none, 1 none, 2 manual, 3 auto
+%define N_TABSIZE    240             ; u32 tab-size (tab-*)
+%define N_CONTENT    244             ; u32 content: 0 none, 1 none
+%define N_TWRAP      248             ; u32 text-wrap: 0 none, 1 wrap, 2 nowrap, 3 balance, 4 pretty
+%define N_SMOOTH     252             ; u32 font-smoothing: 0 none, 1 antialiased, 2 subpixel
 
 ; style record size (style_buf): flags u32, weight u16, align, gap, radius,
 ; px, py, border, opacity, shadow, role, pad, mt, mb, h, grid_cols,
-; ml, mr, pl, pr, pt, pb, trans, ease, duration u16, delay u16 - 32 bytes.
+; ml, mr, pl, pr, pt, pb, trans, ease, duration u16, delay u16,
+; anim, tbehav, family, stretch, varnum, tracking, leading, whitespace,
+; wordbreak, overflow, valign, indent, deco_style, deco_thick, deco_color
+; u32, uo, clamp, list_pos, list_type, hyphens, tab_size, content - 64B.
 ; Kept in ONE define so emit/ssr/glue stay in sync (glue.asm hardcodes
-; i*32 in its JS string on purpose).
-%define STYLE_REC    32
+; i*64 in its JS string on purpose).
+%define STYLE_REC    64
 
 ; style flags (N_FLAGS bits - u32 now)
 %define F_FLEX       1
@@ -151,6 +179,12 @@
 %define F_LOWER      1048576         ; lowercase
 %define F_LINE       2097152         ; line-through (distinct from underline)
 %define F_ITEMSS     4194304         ; items-start (explicit flex-start)
+; typography flags (2026-08-20): text-transform/decoration/font-style toggles
+%define F_NOTITALIC  8388608         ; not-italic -> font-style:normal
+%define F_NORMALCASE 16777216        ; normal-case -> text-transform:none
+%define F_NOUNDERLINE 33554432       ; no-underline -> text-decoration-line:none
+%define F_OVERLINE   67108864        ; overline -> text-decoration-line:overline
+%define F_CAPITALIZE 134217728       ; capitalize -> text-transform:capitalize
 
 ; rec_order entry: 12 bytes (kind u32, node u32, parent_rec u32)
 ;   kind 0 = node record (tag), kind 1 = button view, kind 2 = button label
