@@ -935,6 +935,10 @@ var_fields:
     dd N_SHADOW, 4
     dd N_PT, 4
     dd N_PB, 4
+    dd N_ML, 4
+    dd N_MR, 4
+    dd N_PL, 4
+    dd N_PR, 4
     dd N_GRID_COLS, 1
 var_fields_end:
 

@@ -242,6 +242,17 @@ s_mt          db "mt-", 0
 s_mb          db "mb-", 0
 s_m           db "m-", 0
 s_w           db "w-", 0
+; margin/padding x-axis variants (added 2026-08-20)
+s_my          db "my-", 0
+s_mx          db "mx-", 0
+s_me          db "me-", 0
+s_ms          db "ms-", 0
+s_ml          db "ml-", 0
+s_mr          db "mr-", 0
+s_pe          db "pe-", 0
+s_ps          db "ps-", 0
+s_pl          db "pl-", 0
+s_pr          db "pr-", 0
 
 ; ----------------------------------------------------------------------
 ; SSR + hydration (ui/ssr.asm): the shell embeds the FULL rendered HTML
@@ -279,7 +290,7 @@ s_ssr_slot3 db "', 3, '", 0
 ; global base css served WITH the SSR shell so the first paint already
 ; has the reset + theme (no layout flicker when the glue boots later);
 ; the glue skips injecting its own copy when this tag is present
-s_ssr_sty1  db '<style data-asx-base>*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;font-family:ui-sans-serif,system-ui,sans-serif;padding:48px 24px;background:#', 0
+s_ssr_sty1  db '<style data-asx-base>*{margin:0;padding:0;box-sizing:border-box}button{border:none;background:none;font:inherit}body{min-height:100vh;font-family:ui-sans-serif,system-ui,sans-serif;padding:48px 24px;background:#', 0
 
 ; responsive/hover variants (emit.asm emit_variants)
 s_var_open  db '<style data-asx-variants>', 0
@@ -297,6 +308,12 @@ s_var_px    db 'px;', 0
 s_var_pad   db 'padding:', 0
 s_var_mt    db 'margin-top:', 0
 s_var_mb    db 'margin-bottom:', 0
+s_var_ml    db 'margin-left:', 0
+s_var_mr    db 'margin-right:', 0
+s_var_pl    db 'padding-left:', 0
+s_var_pr    db 'padding-right:', 0
+s_var_pt    db 'padding-top:', 0
+s_var_pb    db 'padding-bottom:', 0
 s_var_w     db 'width:', 0
 s_var_gap   db 'gap:', 0
 s_var_rad   db 'border-radius:', 0

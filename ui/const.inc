@@ -37,7 +37,7 @@
 %define WAT_CAP      65536
 %define STR_BASE     148000
 
-%define NODE_SIZE    128
+%define NODE_SIZE    256
 %define MAX_NODES    128
 %define MAX_STACK    32
 %define MAX_RECORDS  128
@@ -106,6 +106,17 @@
 %define N_PT         118             ; u32 padding-top (pt-*)
 %define N_PB         122             ; u32 padding-bottom (pb-*)
 %define N_GRID_COLS  126             ; u8 grid-template-columns count (grid-cols-N)
+; margin/padding x-axis fields (added 2026-08-20; NODE_SIZE grew to 256)
+%define N_ML         128             ; u32 margin-left (ml-*/ms-/mx-)
+%define N_MR         132             ; u32 margin-right (mr-*/me-/mx-)
+%define N_PL         136             ; u32 padding-left (pl-*/ps-/px-)
+%define N_PR         140             ; u32 padding-right (pr-*/pe-/px-)
+
+; style record size (style_buf): flags u32, weight u16, align, gap, radius,
+; px, py, border, opacity, shadow, role, pad, mt, mb, h, grid_cols,
+; ml, mr, pl, pr, pt, pb - 26 bytes. Kept in ONE define so emit/ssr/glue
+; stay in sync (glue.asm hardcodes i*26 in its JS string on purpose).
+%define STYLE_REC    26
 
 ; style flags (N_FLAGS bits - u32 now)
 %define F_FLEX       1

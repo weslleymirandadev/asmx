@@ -416,7 +416,7 @@ compile_block:
     push rcx
     push rdx
     mov rdi, rdx
-    shr rdi, 7                  ; node idx (NODE_SIZE = 128)
+    shr rdi, 8                  ; node idx (NODE_SIZE = 256)
     lea rsi, [r15 + 1]          ; text ptr (in_buf offset)
     mov edx, [rcx + N_TEXT_LEN] ; u32 field!
     call check_interp
@@ -1159,7 +1159,7 @@ class_apply:
     pop r15                     ; bp
     mov r8, r12
     sub r8, nodes
-    shr r8, 7                   ; node idx (NODE_SIZE = 128)
+    shr r8, 8                   ; node idx (NODE_SIZE = 256)
     ; field table: (offset u32, size u32) - compare + record
     lea r10, [var_fields]
 .var_loop:
@@ -1589,6 +1589,116 @@ class_apply_core:
     mov [r12 + N_MB], eax
     jmp .done
 .not_mb:
+    ; my-<n> (margin-top + margin-bottom)
+    cmp r14d, 3
+    jb .not_my
+    lea rdi, [r13]
+    lea rsi, [s_my]
+    mov rdx, 3
+    call strncmp
+    test rax, rax
+    jnz .not_my
+    lea rdi, [r13 + 3]
+    mov rsi, r14
+    sub rsi, 3
+    call scale_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_MT], eax
+    mov [r12 + N_MB], eax
+    jmp .done
+.not_my:
+    ; mx-<n> (margin-left + margin-right)
+    cmp r14d, 3
+    jb .not_mx
+    lea rdi, [r13]
+    lea rsi, [s_mx]
+    mov rdx, 3
+    call strncmp
+    test rax, rax
+    jnz .not_mx
+    lea rdi, [r13 + 3]
+    mov rsi, r14
+    sub rsi, 3
+    call scale_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_ML], eax
+    mov [r12 + N_MR], eax
+    jmp .done
+.not_mx:
+    ; me-<n> (margin-inline-end; LTR = right)
+    cmp r14d, 3
+    jb .not_me
+    lea rdi, [r13]
+    lea rsi, [s_me]
+    mov rdx, 3
+    call strncmp
+    test rax, rax
+    jnz .not_me
+    lea rdi, [r13 + 3]
+    mov rsi, r14
+    sub rsi, 3
+    call scale_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_MR], eax
+    jmp .done
+.not_me:
+    ; ms-<n> (margin-inline-start; LTR = left)
+    cmp r14d, 3
+    jb .not_ms
+    lea rdi, [r13]
+    lea rsi, [s_ms]
+    mov rdx, 3
+    call strncmp
+    test rax, rax
+    jnz .not_ms
+    lea rdi, [r13 + 3]
+    mov rsi, r14
+    sub rsi, 3
+    call scale_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_ML], eax
+    jmp .done
+.not_ms:
+    ; ml-<n> (margin-left)
+    cmp r14d, 3
+    jb .not_ml
+    lea rdi, [r13]
+    lea rsi, [s_ml]
+    mov rdx, 3
+    call strncmp
+    test rax, rax
+    jnz .not_ml
+    lea rdi, [r13 + 3]
+    mov rsi, r14
+    sub rsi, 3
+    call scale_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_ML], eax
+    jmp .done
+.not_ml:
+    ; mr-<n> (margin-right)
+    cmp r14d, 3
+    jb .not_mr
+    lea rdi, [r13]
+    lea rsi, [s_mr]
+    mov rdx, 3
+    call strncmp
+    test rax, rax
+    jnz .not_mr
+    lea rdi, [r13 + 3]
+    mov rsi, r14
+    sub rsi, 3
+    call scale_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_MR], eax
+    jmp .done
+.not_mr:
     ; p-<n>
     cmp r14d, 2
     jb .not_p
@@ -1605,6 +1715,78 @@ class_apply_core:
     mov [r12 + N_PAD], eax
     jmp .done
 .not_p:
+    ; pe-<n> (padding-inline-end; LTR = right)
+    cmp r14d, 3
+    jb .not_pe
+    lea rdi, [r13]
+    lea rsi, [s_pe]
+    mov rdx, 3
+    call strncmp
+    test rax, rax
+    jnz .not_pe
+    lea rdi, [r13 + 3]
+    mov rsi, r14
+    sub rsi, 3
+    call scale_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_PR], eax
+    jmp .done
+.not_pe:
+    ; ps-<n> (padding-inline-start; LTR = left)
+    cmp r14d, 3
+    jb .not_ps
+    lea rdi, [r13]
+    lea rsi, [s_ps]
+    mov rdx, 3
+    call strncmp
+    test rax, rax
+    jnz .not_ps
+    lea rdi, [r13 + 3]
+    mov rsi, r14
+    sub rsi, 3
+    call scale_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_PL], eax
+    jmp .done
+.not_ps:
+    ; pl-<n> (padding-left)
+    cmp r14d, 3
+    jb .not_pl
+    lea rdi, [r13]
+    lea rsi, [s_pl]
+    mov rdx, 3
+    call strncmp
+    test rax, rax
+    jnz .not_pl
+    lea rdi, [r13 + 3]
+    mov rsi, r14
+    sub rsi, 3
+    call scale_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_PL], eax
+    jmp .done
+.not_pl:
+    ; pr-<n> (padding-right)
+    cmp r14d, 3
+    jb .not_pr
+    lea rdi, [r13]
+    lea rsi, [s_pr]
+    mov rdx, 3
+    call strncmp
+    test rax, rax
+    jnz .not_pr
+    lea rdi, [r13 + 3]
+    mov rsi, r14
+    sub rsi, 3
+    call scale_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_PR], eax
+    jmp .done
+.not_pr:
     ; w-<n>
     cmp r14d, 2
     jb .not_w
@@ -1621,7 +1803,7 @@ class_apply_core:
     mov [r12 + N_W], eax
     jmp .done
 .not_w:
-    ; m-<n> (after mt-/mb-)
+    ; m-<n> (all four sides - mt/mb/ml/mr)
     cmp r14d, 2
     jb .done
     lea rdi, [r13]
@@ -1634,8 +1816,12 @@ class_apply_core:
     mov rsi, r14
     sub rsi, 2
     call scale_lookup
+    cmp rax, -1
+    je .done
     mov [r12 + N_MT], eax
     mov [r12 + N_MB], eax
+    mov [r12 + N_ML], eax
+    mov [r12 + N_MR], eax
 .done:
     pop r14
     pop r13

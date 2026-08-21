@@ -398,8 +398,8 @@ ssr_tag_open:
     ; '"'
     lea rdi, [s_ssr_idc]
     call out_str
-    ; role (button view)? style record +14 == 1 (20B records!)
-    imul rax, r12, 20
+    ; role (button view)? style record +14 == 1
+    imul rax, r12, STYLE_REC
     lea r13, [style_buf + rax]
     cmp byte [r13 + 14], 1
     jne .to_no_role
@@ -457,8 +457,8 @@ ssr_css_view:
     mov r12, rdi
     imul rax, r12, 32
     lea rbx, [blob_buf + rax + 24]   ; 32B record
-    imul rax, r12, 20
-    lea r13, [style_buf + rax]       ; 20B style record
+    imul rax, r12, STYLE_REC
+    lea r13, [style_buf + rax]       ; style record
     ; hidden? display:none wins over everything (no flex/grid emit)
     mov eax, [r13]
     test eax, F_HIDDEN
@@ -595,7 +595,18 @@ ssr_css_view:
     lea rdi, [s_css_semi]
     call out_str
 .no_bg:
-    ; padding: (px||pad) ? "padding:" + (py||pad) + "px " + (px||pad) + "px;"
+    ; padding: if any axis-specific field (pl/pr/pt/pb) is set, emit the
+    ; full 4-value form (each axis: specific > px/py > pad); otherwise
+    ; the legacy 2-value form (py||pad, px||pad)
+    movzx eax, byte [r13 + 22]   ; pl
+    movzx ecx, byte [r13 + 23]   ; pr
+    or eax, ecx
+    movzx ecx, byte [r13 + 24]   ; pt
+    or eax, ecx
+    movzx ecx, byte [r13 + 25]   ; pb
+    or eax, ecx
+    jnz .pad4
+    ; px-*/p-* 2-value form
     movzx eax, byte [r13 + 9]    ; px
     test eax, eax
     jnz .have_px
@@ -621,6 +632,61 @@ ssr_css_view:
     call ssr_dec
     lea rdi, [s_css_px_semi]
     call out_str
+    jmp .no_pad
+.pad4:
+    ; top = pt || py || pad (r10), right = pr || px || pad (r11);
+    ; bottom and left computed at emit time (edi). rbx is the blob
+    ; record ptr here - NEVER clobber it.
+    movzx r10d, byte [r13 + 24]
+    test r10d, r10d
+    jnz .pad_top
+    movzx r10d, byte [r13 + 10]
+    test r10d, r10d
+    jnz .pad_top
+    movzx r10d, byte [r13 + 15]
+.pad_top:
+    movzx r11d, byte [r13 + 23]
+    test r11d, r11d
+    jnz .pad_right
+    movzx r11d, byte [r13 + 9]
+    test r11d, r11d
+    jnz .pad_right
+    movzx r11d, byte [r13 + 15]
+.pad_right:
+    lea rdi, [s_css_pad]
+    call out_str
+    mov edi, r10d
+    call ssr_dec
+    lea rdi, [s_css_px_sp]
+    call out_str
+    mov edi, r11d
+    call ssr_dec
+    lea rdi, [s_css_px_sp]
+    call out_str
+    ; bottom = pb || py || pad
+    movzx edi, byte [r13 + 25]
+    test edi, edi
+    jnz .pad_bottom
+    movzx edi, byte [r13 + 10]
+    test edi, edi
+    jnz .pad_bottom
+    movzx edi, byte [r13 + 15]
+.pad_bottom:
+    call ssr_dec
+    lea rdi, [s_css_px_sp]
+    call out_str
+    ; left = pl || px || pad
+    movzx edi, byte [r13 + 22]
+    test edi, edi
+    jnz .pad_left
+    movzx edi, byte [r13 + 9]
+    test edi, edi
+    jnz .pad_left
+    movzx edi, byte [r13 + 15]
+.pad_left:
+    call ssr_dec
+    lea rdi, [s_css_px_semi]
+    call out_str
 .no_pad:
     ; gap
     movzx eax, byte [r13 + 7]
@@ -633,7 +699,12 @@ ssr_css_view:
     lea rdi, [s_css_px_semi]
     call out_str
 .no_gap:
-    ; margin: (mt||mb)
+    ; margin: ml||mr forces the 4-value form (mt mr mb ml), else the
+    ; legacy (mt||mb) ? "margin:mt 0 mb;"
+    movzx eax, byte [r13 + 20]   ; ml
+    movzx ecx, byte [r13 + 21]   ; mr
+    or eax, ecx
+    jnz .mg4
     movzx eax, byte [r13 + 16]   ; mt
     movzx ecx, byte [r13 + 17]   ; mb
     test eax, eax
@@ -648,6 +719,26 @@ ssr_css_view:
     lea rdi, [s_css_px0]
     call out_str
     movzx edi, byte [r13 + 17]
+    call ssr_dec
+    lea rdi, [s_css_px_semi]
+    call out_str
+    jmp .no_mg
+.mg4:
+    lea rdi, [s_css_mg]
+    call out_str
+    movzx edi, byte [r13 + 16]
+    call ssr_dec
+    lea rdi, [s_css_px_sp]
+    call out_str
+    movzx edi, byte [r13 + 21]
+    call ssr_dec
+    lea rdi, [s_css_px_sp]
+    call out_str
+    movzx edi, byte [r13 + 17]
+    call ssr_dec
+    lea rdi, [s_css_px_sp]
+    call out_str
+    movzx edi, byte [r13 + 20]
     call ssr_dec
     lea rdi, [s_css_px_semi]
     call out_str
@@ -761,7 +852,7 @@ ssr_css_label:
     mov r12, rdi
     imul rax, r12, 32
     lea rbx, [blob_buf + rax + 24]
-    imul rax, r12, 20
+    imul rax, r12, STYLE_REC
     lea r13, [style_buf + rax]
     lea rdi, [s_css_l_base]      ; "display:block;font-size:"
     call out_str
@@ -843,7 +934,12 @@ ssr_css_label:
     lea rdi, [s_css_ln]
     call out_str
 .no_ln:
-    ; margin: (mt||mb) - labels honor mt-*/mb-* like views do
+    ; margin: (mt||mb) - labels honor mt-*/mb-* like views do; ml||mr
+    ; forces the 4-value form (same rule as ssr_css_view)
+    movzx eax, byte [r13 + 20]   ; ml
+    movzx ecx, byte [r13 + 21]   ; mr
+    or eax, ecx
+    jnz .mgl4
     movzx eax, byte [r13 + 16]   ; mt
     movzx ecx, byte [r13 + 17]   ; mb
     test eax, eax
@@ -858,6 +954,26 @@ ssr_css_label:
     lea rdi, [s_css_px0]
     call out_str
     movzx edi, byte [r13 + 17]
+    call ssr_dec
+    lea rdi, [s_css_px_semi]
+    call out_str
+    jmp .no_mgl
+.mgl4:
+    lea rdi, [s_css_mg]
+    call out_str
+    movzx edi, byte [r13 + 16]
+    call ssr_dec
+    lea rdi, [s_css_px_sp]
+    call out_str
+    movzx edi, byte [r13 + 21]
+    call ssr_dec
+    lea rdi, [s_css_px_sp]
+    call out_str
+    movzx edi, byte [r13 + 17]
+    call ssr_dec
+    lea rdi, [s_css_px_sp]
+    call out_str
+    movzx edi, byte [r13 + 20]
     call ssr_dec
     lea rdi, [s_css_px_semi]
     call out_str

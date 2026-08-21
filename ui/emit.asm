@@ -385,11 +385,11 @@ emit_wat_componente:
     add [str_cursor], rax
     ; ---- declarative states: strings + state_data ----
     call emit_states
-    ; ---- style records (20B each, after the string pool) ----
-    ; build style_buf: one 20-byte style record per widget record
+    ; ---- style records (STYLE_REC bytes each, after the string pool) ----
+    ; build style_buf: one STYLE_REC-byte style record per widget record
     ; (same order as the 32B blob records): flags u32, weight u16,
     ; align, gap, radius, px, py, border, opacity, shadow, role, pad,
-    ; mt, mb, h, grid_cols
+    ; mt, mb, h, grid_cols, ml, mr, pl, pr, pt, pb
     call build_style_records
     ; styles data segment at STR_BASE + str_cursor
     mov rax, [str_cursor]
@@ -408,23 +408,23 @@ emit_wat_componente:
     lea rbx, [style_buf + r13]
     xor r14, r14
 .sbyte_inner:
-    cmp r14, 20
+    cmp r14, STYLE_REC
     jge .sbyte_next
     movzx eax, byte [rbx + r14]
     call out_wat_byte_hex
     inc r14
     jmp .sbyte_inner
 .sbyte_next:
-    add r13, 20
+    add r13, STYLE_REC
     jmp .sbytes
 .sbytes_done:
     lea rdi, [s_wat_d3]
     call out_wat_str
-    ; str_cursor += state_data + 20 * rec_count (dyn_parts already added)
+    ; str_cursor += state_data + STYLE_REC * rec_count (dyn_parts already added)
     mov eax, [state_data_len]
     add [str_cursor], rax
     mov eax, [rec_count]
-    imul eax, eax, 20
+    imul eax, eax, STYLE_REC
     add [str_cursor], rax
     pop r15
     pop r14
@@ -433,18 +433,18 @@ emit_wat_componente:
     pop rbx
     ret
 
-; build_style_records - fills style_buf with one 20-byte style record per
-; widget record (same order as the 32B blob records): flags u32, weight
-; u16, align, gap, radius, px, py, border, opacity, shadow, role, pad,
-; mt, mb, h, grid_cols. Sets style_len = rec_count * 20. Called by
-; emit_wat_componente AND by the SSR pass (emit_shell) - the SSR HTML
-; needs the same style data.
+; build_style_records - fills style_buf with one STYLE_REC-byte style
+; record per widget record (same order as the 32B blob records): flags
+; u32, weight u16, align, gap, radius, px, py, border, opacity, shadow,
+; role, pad, mt, mb, h, grid_cols, ml, mr, pl, pr, pt, pb. Sets
+; style_len = rec_count * STYLE_REC. Called by emit_wat_componente AND by
+; the SSR pass (emit_shell) - the SSR HTML needs the same style data.
 build_style_records:
     push rbx
     push r12
     push r13
     mov rax, [rec_count]
-    imul rax, rax, 20
+    imul rax, rax, STYLE_REC
     mov [style_len], rax
     xor r13, r13
 .sloop:
@@ -456,13 +456,13 @@ build_style_records:
     mov ebx, [rcx + 4]           ; node idx
     imul rbx, rbx, NODE_SIZE
     lea rbx, [nodes + rbx]       ; node ptr
-    imul rax, r13, 20
+    imul rax, r13, STYLE_REC
     lea rdi, [style_buf + rax]
-    ; zero the 20 bytes
-    mov ecx, 20
+    ; zero the record
+    mov ecx, STYLE_REC
     xor eax, eax
     rep stosb
-    imul rax, r13, 20
+    imul rax, r13, STYLE_REC
     lea rdi, [style_buf + rax]
     ; flags u32
     mov eax, [rbx + N_FLAGS]
@@ -507,6 +507,20 @@ build_style_records:
     mov [rdi + 18], al
     movzx eax, byte [rbx + N_GRID_COLS]
     mov [rdi + 19], al
+    ; x-axis margins/paddings + pt/pb (2026-08-20): +20 ml +21 mr
+    ; +22 pl +23 pr +24 pt +25 pb
+    movzx eax, byte [rbx + N_ML]
+    mov [rdi + 20], al
+    movzx eax, byte [rbx + N_MR]
+    mov [rdi + 21], al
+    movzx eax, byte [rbx + N_PL]
+    mov [rdi + 22], al
+    movzx eax, byte [rbx + N_PR]
+    mov [rdi + 23], al
+    movzx eax, byte [rbx + N_PT]
+    mov [rdi + 24], al
+    movzx eax, byte [rbx + N_PB]
+    mov [rdi + 25], al
     inc r13
     jmp .sloop
 .sloop_done:
@@ -1229,6 +1243,66 @@ emit_var_prop:
     call out_str
     jmp .done
 .not_mb:
+    cmp r12d, N_ML
+    jne .not_ml
+    lea rdi, [s_var_ml]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_ml:
+    cmp r12d, N_MR
+    jne .not_mr
+    lea rdi, [s_var_mr]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_mr:
+    cmp r12d, N_PL
+    jne .not_pl
+    lea rdi, [s_var_pl]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_pl:
+    cmp r12d, N_PR
+    jne .not_pr
+    lea rdi, [s_var_pr]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_pr:
+    cmp r12d, N_PT
+    jne .not_pt
+    lea rdi, [s_var_pt]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_pt:
+    cmp r12d, N_PB
+    jne .not_pb
+    lea rdi, [s_var_pb]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_pb:
     cmp r12d, N_W
     jne .not_w
     lea rdi, [s_var_w]
