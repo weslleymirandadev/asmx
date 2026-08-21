@@ -341,6 +341,11 @@ s_var_grid  db 'display:grid;', 0
 s_var_flex  db 'display:flex;flex-direction:', 0
 s_var_col   db 'column', 0
 s_var_row   db 'row', 0
+s_var_just  db 'justify-content:', 0
+s_css_700   db '700', 0
+s_var_plx   db 'padding-left:', 0
+s_var_prx   db 'padding-right:', 0
+s_bang      db '!important', 0
 s_ssr_sty2  db ';color:#', 0
 s_ssr_sty3  db '}</style>', 0
 s_ssr_span1 db '<span data-asx-id="', 0

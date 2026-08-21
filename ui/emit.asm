@@ -1200,11 +1200,71 @@ emit_variants:
     ; dwords; loading 8 bytes would mix in the next entry's bytes)
     mov edi, [r15 + V_FIELD]
     mov esi, [r15 + V_VALUE]
+    mov r14d, [out_len]          ; rule start (selector already emitted)
     call emit_var_prop
-    ; emit_var_prop mirrors the base css (declarations end with ';'),
-    ; but a rule needs "decl!important}" - strip the trailing ';' so the
-    ; !important lands inside the declaration (a ';' before it would
-    ; make the rule invalid and the browser would drop it).
+    ; !important pass: every ';' that is NOT the last byte of the rule
+    ; becomes "!important;" so multi-declaration rules (padding-left/right,
+    ; flex+direction, clamp+overflow) carry the importance on EACH
+    ; declaration. A trailing ';' (last byte) is left for the strip+append.
+    xor ecx, ecx                 ; count eligible ';' in the rule
+    mov rsi, r14
+.count_semi:
+    cmp rsi, [out_len]
+    jge .count_done
+    cmp byte [out_buf + rsi], ';'
+    jne .count_next
+    lea rax, [rsi + 1]
+    cmp rax, [out_len]
+    jge .count_next              ; trailing ';' (last byte) -> strip handles it
+    inc ecx
+.count_next:
+    inc rsi
+    jmp .count_semi
+.count_done:
+    test ecx, ecx
+    jz .imp_done
+    mov rsi, r14
+    xor edi, edi                 ; dst index into var_rule_buf
+.cp_loop:
+    cmp rsi, [out_len]
+    jge .cp_done
+    mov al, [out_buf + rsi]
+    mov [var_rule_buf + rdi], al
+    inc rdi
+    inc rsi
+    cmp al, ';'
+    jne .cp_loop
+    cmp rsi, [out_len]
+    jge .cp_loop                 ; trailing ';' (last byte) stays
+    ; not trailing: "!important" goes BEFORE the ';' - the ';' was just
+    ; written at var_rule_buf[rdi-1]; back up, write the bang, then the ';'
+    dec rdi
+    lea r9, [s_bang]
+    mov ecx, 10
+.cp_bang:
+    mov al, [r9]
+    mov [var_rule_buf + rdi], al
+    inc rdi
+    inc r9
+    dec ecx
+    jnz .cp_bang
+    mov al, ';'
+    mov [var_rule_buf + rdi], al
+    inc rdi
+    jmp .cp_loop
+.cp_done:
+    mov rcx, rdi
+    mov rsi, var_rule_buf
+    lea rdi, [out_buf + r14]
+    push rcx                 ; rep movsb clobbers rcx - save the length
+    rep movsb
+    pop rcx
+    add r14, rcx
+    mov [out_len], r14
+.imp_done:
+    ; strip the trailing ';' so the !important lands inside the
+    ; declaration (a ';' before it would make the rule invalid and the
+    ; browser would drop it).
     mov rcx, [out_len]
     test rcx, rcx
     jz .have_end
@@ -1461,6 +1521,58 @@ emit_var_prop:
     call out_str
     jmp .done
 .not_pb:
+    cmp r12d, N_PX
+    jne .not_pxv
+    lea rdi, [s_var_plx]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    lea rdi, [s_var_prx]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_pxv:
+    cmp r12d, N_PY
+    jne .not_pyv
+    lea rdi, [s_var_pt]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    lea rdi, [s_var_pb]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_pyv:
+    cmp r12d, N_H
+    jne .not_hv
+    lea rdi, [s_css_mh]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_px]
+    call out_str
+    jmp .done
+.not_hv:
+    cmp r12d, N_BORDER
+    jne .not_bdv
+    lea rdi, [s_css_bd1]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_css_bd2]
+    call out_str
+    jmp .done
+.not_bdv:
     cmp r12d, N_TRANS
     jne .not_trans
     lea rdi, [s_var_tprop]
@@ -1988,7 +2100,7 @@ emit_var_prop:
     jmp .done
 .not_grd:
     test r13d, F_FLEX
-    jz .done
+    jz .not_flex
     lea rdi, [s_var_flex]
     call out_str
     test r13d, F_FLEXCOL
@@ -1998,6 +2110,158 @@ emit_var_prop:
 .row:
     lea rdi, [s_var_row]
 .dir_call:
+    call out_str
+    jmp .done
+.not_flex:
+    test r13d, F_ITEMSC
+    jz .not_items_c
+    lea rdi, [s_css_items]
+    call out_str
+    lea rdi, [s_css_center]
+    call out_str
+    jmp .done
+.not_items_c:
+    test r13d, F_ITEMSE
+    jz .not_items_e
+    lea rdi, [s_css_items]
+    call out_str
+    lea rdi, [s_css_fe]
+    call out_str
+    jmp .done
+.not_items_e:
+    test r13d, F_ITEMSS
+    jz .not_items_s
+    lea rdi, [s_css_items]
+    call out_str
+    lea rdi, [s_css_fs]
+    call out_str
+    jmp .done
+.not_items_s:
+    test r13d, F_ITEMST
+    jz .not_items_t
+    lea rdi, [s_css_items]
+    call out_str
+    lea rdi, [s_css_stretch]
+    call out_str
+    jmp .done
+.not_items_t:
+    test r13d, F_JUSTC
+    jz .not_just_c
+    lea rdi, [s_var_just]
+    call out_str
+    lea rdi, [s_css_center]
+    call out_str
+    jmp .done
+.not_just_c:
+    test r13d, F_JUSTE
+    jz .not_just_e
+    lea rdi, [s_var_just]
+    call out_str
+    lea rdi, [s_css_fe]
+    call out_str
+    jmp .done
+.not_just_e:
+    test r13d, F_JUSTB
+    jz .not_just_b
+    lea rdi, [s_var_just]
+    call out_str
+    lea rdi, [s_css_sb]
+    call out_str
+    jmp .done
+.not_just_b:
+    test r13d, F_JUSTA
+    jz .not_just_a
+    lea rdi, [s_var_just]
+    call out_str
+    lea rdi, [s_css_sa]
+    call out_str
+    jmp .done
+.not_just_a:
+    test r13d, F_JUSTV
+    jz .not_just_v
+    lea rdi, [s_var_just]
+    call out_str
+    lea rdi, [s_css_sv]
+    call out_str
+    jmp .done
+.not_just_v:
+    test r13d, F_WRAP
+    jz .not_wrap
+    lea rdi, [s_css_wrap]
+    call out_str
+    jmp .done
+.not_wrap:
+    test r13d, F_GROW
+    jz .not_grow
+    lea rdi, [s_css_grow]
+    call out_str
+    jmp .done
+.not_grow:
+    test r13d, F_BOLD
+    jz .not_bold
+    lea rdi, [s_css_fw]
+    call out_str
+    lea rdi, [s_css_700]
+    call out_str
+    jmp .done
+.not_bold:
+    test r13d, F_UPPER
+    jz .not_upper
+    lea rdi, [s_css_tt]
+    call out_str
+    jmp .done
+.not_upper:
+    test r13d, F_LOWER
+    jz .not_lower
+    lea rdi, [s_css_lo]
+    call out_str
+    jmp .done
+.not_lower:
+    test r13d, F_CAPITALIZE
+    jz .not_cap
+    lea rdi, [s_css_tcap]
+    call out_str
+    jmp .done
+.not_cap:
+    test r13d, F_NORMALCASE
+    jz .not_ncase
+    lea rdi, [s_css_tnc]
+    call out_str
+    jmp .done
+.not_ncase:
+    test r13d, F_ITALIC
+    jz .not_ital
+    lea rdi, [s_css_it]
+    call out_str
+    jmp .done
+.not_ital:
+    test r13d, F_NOTITALIC
+    jz .not_notit
+    lea rdi, [s_css_ni]
+    call out_str
+    jmp .done
+.not_notit:
+    test r13d, F_UNDER
+    jz .not_und
+    lea rdi, [s_css_un]
+    call out_str
+    jmp .done
+.not_und:
+    test r13d, F_LINE
+    jz .not_line
+    lea rdi, [s_css_ln]
+    call out_str
+    jmp .done
+.not_line:
+    test r13d, F_OVERLINE
+    jz .not_ovl
+    lea rdi, [s_css_ovl]
+    call out_str
+    jmp .done
+.not_ovl:
+    test r13d, F_NOUNDERLINE
+    jz .done
+    lea rdi, [s_css_nun]
     call out_str
 .done:
     pop r13

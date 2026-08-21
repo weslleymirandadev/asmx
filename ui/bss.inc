@@ -59,6 +59,7 @@ style_buf:    resb MAX_RECORDS * STYLE_REC ; style records (64B: flags u32/weigh
 style_len:    resq 1
 style_addr:   resq 1                  ; wasm address of the styles data segment
 variant_tab:  resb MAX_VARIANTS * VAR_ENTRY
+var_rule_buf: resb 512          ; scratch for the variant rule !important pass
 variant_count: resq 1
 node_tmp:     resb NODE_SIZE          ; scratch copy for variant diffing
 ; html attributes per node: attr_buf holds 'name="value" ...' strings,

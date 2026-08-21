@@ -702,12 +702,14 @@ s_fs_6xl db "6xl", 0
 s_fs_7xl db "7xl", 0
 s_fs_8xl db "8xl", 0
 s_fs_9xl db "9xl", 0
+s_fs_md  db "md", 0
 
 tw_sizes:
     dq s_fs_xs, 12
     dq s_fs_sm, 14
-    dq s_fs_base, 16
-    dq s_fs_lg, 18
+    dq s_fs_md, 16            ; extension: text-md = 16px (Tailwind v4 has
+    dq s_fs_base, 16          ; no text-md - it is text-base; alias keeps
+    dq s_fs_lg, 18            ; user typos working)
     dq s_fs_xl, 20
     dq s_fs_2xl, 24
     dq s_fs_3xl, 30
