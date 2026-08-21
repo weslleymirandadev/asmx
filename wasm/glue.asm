@@ -254,7 +254,7 @@ section .data
  db '        const an = anim ? "animation:" + ANIM[anim] + ";" : "";', 10
  db '        const lh = lead ? "line-height:" + LEAD[lead] + ";" : "line-height:1.4;";', 10
  db '        const disp = clamp ? "display:-webkit-box;-webkit-box-orient:vertical;font-size:" : "display:block;font-size:";', 10
- db '        const css = disp + fs + "px;" + col + fam + str + vn + sm + fw + trk + ta + tt + it + un + dcl + dst + dth + uo + mgL + ws + wb + ov + tw + va + ind + hy + tab + cl + cont + an + lh;', 10
+ db '        const css = disp + fs + "px;" + col + fam + str + vn + sm + fw + trk + ta + tt + it + un + dcl + dst + dth + uo + mgL + ws + wb + ov + tw + va + ind + hy + tab + cl + cont + tr + an + lh;', 10
  db '        if (el.style.cssText !== css) el.style.cssText = css;', 10
  db '        const tp = v.getUint32(o+16,true);', 10
  db '        let end = tp; while (v.getUint8(end) !== 0) end++;', 10
