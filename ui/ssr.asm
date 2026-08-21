@@ -1496,6 +1496,100 @@ ssr_css_label:
     lea rdi, [s_css_contn]
     call out_str
 .no_cont:
+    ; transitions (v4) - labels animate too (e.g. @a transition-all
+    ; duration-250 ease-in-out on a text link). Same block as the view,
+    ; inserted between content and animation (glue mirrors the order).
+    movzx r10d, byte [r13 + 26]
+    test r10d, r10d
+    jz .ltr_none
+    lea rdi, [s_css_tprop]
+    call out_str
+    cmp r10d, 2
+    je .ltr_tp_none
+    cmp r10d, 3
+    je .ltr_tp_all
+    cmp r10d, 4
+    je .ltr_tp_colors
+    cmp r10d, 5
+    je .ltr_tp_opacity
+    cmp r10d, 6
+    je .ltr_tp_shadow
+    cmp r10d, 7
+    je .ltr_tp_transform
+    lea rdi, [s_tp_default]
+    jmp .ltr_tp_done
+.ltr_tp_none:
+    lea rdi, [s_tp_none]
+    jmp .ltr_tp_done
+.ltr_tp_all:
+    lea rdi, [s_tp_all]
+    jmp .ltr_tp_done
+.ltr_tp_colors:
+    lea rdi, [s_tp_colors]
+    jmp .ltr_tp_done
+.ltr_tp_opacity:
+    lea rdi, [s_tp_opacity]
+    jmp .ltr_tp_done
+.ltr_tp_shadow:
+    lea rdi, [s_tp_shadow]
+    jmp .ltr_tp_done
+.ltr_tp_transform:
+    lea rdi, [s_tp_transform]
+.ltr_tp_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    ; transition-none emits ONLY the property (v4 semantics)
+    cmp r10d, 2
+    je .ltr_none
+    lea rdi, [s_css_tdur]
+    call out_str
+    movzx edi, word [r13 + 28]
+    test edi, edi
+    jnz .ltr_have_dur
+    mov edi, 150
+.ltr_have_dur:
+    call ssr_dec
+    lea rdi, [s_css_ms]
+    call out_str
+    lea rdi, [s_css_tfn]
+    call out_str
+    movzx eax, byte [r13 + 27]
+    cmp eax, 1
+    je .ltr_ease_lin
+    cmp eax, 2
+    je .ltr_ease_in
+    cmp eax, 3
+    je .ltr_ease_out
+    cmp eax, 4
+    je .ltr_ease_io
+    lea rdi, [s_ease_inout]
+    jmp .ltr_ease_done
+.ltr_ease_lin:
+    lea rdi, [s_ease_linear]
+    jmp .ltr_ease_done
+.ltr_ease_in:
+    lea rdi, [s_ease_in]
+    jmp .ltr_ease_done
+.ltr_ease_out:
+    lea rdi, [s_ease_out]
+    jmp .ltr_ease_done
+.ltr_ease_io:
+    lea rdi, [s_ease_inout]
+.ltr_ease_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    movzx eax, word [r13 + 30]
+    test eax, eax
+    jz .ltr_none
+    lea rdi, [s_css_tdelay]
+    call out_str
+    movzx edi, word [r13 + 30]
+    call ssr_dec
+    lea rdi, [s_css_ms]
+    call out_str
+.ltr_none:
     ; animation (r13+32, table anim_vals)
     movzx r10d, byte [r13 + 32]
     test r10d, r10d

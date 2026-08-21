@@ -1789,6 +1789,27 @@ class_apply_core:
     mov [r12 + N_DTHICK], eax
     jmp .done
 .deco_px:
+    ; decoration-none -> text-decoration-line:none (common user intent;
+    ; Tailwind v4 spells it no-underline, but decoration-none is a
+    ; frequent mistake on links). Any other non-numeric suffix is a
+    ; no-op, NOT a silent thickness (atoi would return 0 -> from-font).
+    cmp byte [r13 + 11], 'n'
+    jne .dpx_num
+    cmp r14d, 15
+    jne .dpx_num
+    lea rdi, [r13 + 11]
+    lea rsi, [s_v_none]
+    mov rdx, 4
+    call strncmp
+    test rax, rax
+    jnz .dpx_num
+    or dword [r12 + N_FLAGS], F_NOUNDERLINE
+    jmp .done
+.dpx_num:
+    cmp byte [r13 + 11], '0'
+    jb .done
+    cmp byte [r13 + 11], '9'
+    ja .done
     lea rdi, [r13 + 11]
     mov rsi, r14
     sub rsi, 11
