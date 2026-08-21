@@ -379,15 +379,20 @@ compile_block:
     mov [rdi + N_TEXT_LEN], eax
     ; declarative state interpolation ({x} / {x.field})?
     ; (r15d = child idx survives the call; the line start goes to the
-    ; stack since check_interp clobbers caller-saved regs)
+    ; stack since check_interp clobbers caller-saved regs; r9 - the
+    ; parent idx - is caller-saved too and check_interp clobbers it:
+    ; push it across the call or the parent first/last update below
+    ; writes through nodes[r9] with a garbage index -> segfault)
     push r15                    ; stack: line start
     mov r15d, r10d              ; child node idx (callee-saved)
     push rdi                    ; stack: line start, child node ptr
+    push r9                     ; stack: line start, child node ptr, parent idx
     mov edx, [rdi + N_TEXT_LEN] ; u32 field!
     mov rdi, r15
-    mov rax, [rsp + 8]          ; saved line start
+    mov rax, [rsp + 16]         ; saved line start (3 pushes above)
     lea rsi, [rax + 1]          ; text ptr (in_buf offset)
     call check_interp
+    pop r9                      ; restore the parent idx
     pop rdi
     add rsp, 8                  ; drop the saved line start
     ; parent first/last point at the new child
@@ -563,15 +568,30 @@ compile_block:
     mov rsi, r9
     mov rdx, r14
     ; find a ':' in [r9, r14) - the inline text separator, UNLESS it is
-    ; a variant prefix separator (hover:/sm:/md:/... - then keep looking)
+    ; a variant prefix separator (hover:/sm:/md:/... - then keep looking).
+    ; Attribute VALUES are quoted ("href=\"...\"") - skip them whole: a ':'
+    ; inside a URL (https:) is NOT an inline-text separator. Without this
+    ; the colon-in-URL truncates the parse_classes end -> zero-length
+    ; token in .attr_vscan -> infinite loop (class_apply with len 0).
     mov r8, r9
 .cls_scan:
     cmp r8, r14
     jge .cls_done
+    cmp byte [in_buf + r8], '"'
+    je .cls_attr_val
     cmp byte [in_buf + r8], ':'
     je .cls_colon
     inc r8
     jmp .cls_scan
+.cls_attr_val:
+    inc r8                      ; skip the opening quote
+.cls_attr_scan:
+    cmp r8, r14
+    jge .cls_done
+    cmp byte [in_buf + r8], '"'
+    je .cls_scan                ; closing quote -> resume the normal scan
+    inc r8
+    jmp .cls_attr_scan
 .cls_colon:
     ; token before the ':' = [last space, r8). If it is a variant
     ; prefix, this ':' belongs to the class (hover:bg-x), skip it.
