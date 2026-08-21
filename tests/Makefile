@@ -35,6 +35,9 @@ $(BUILD)/pkg/%.o: $(PKG)/%.asm | $(BUILD)
 	@mkdir -p $(dir $@)
 	$(AS) -f elf64 -I $(PKG) -o $@ $<
 
+# the glue module embeds wasm/glue.js via incbin - rebuild when it changes
+$(BUILD)/pkg/wasm/glue.o: $(PKG)/wasm/glue.js
+
 $(BUILD)/app/%.o: $(APP)/%.asm | $(BUILD)
 	@mkdir -p $(dir $@)
 	$(AS) -f elf64 -I $(PKG) -I $(APP) -P$(PKG)/asx.inc -o $@ $<
