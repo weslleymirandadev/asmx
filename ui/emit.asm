@@ -1201,6 +1201,18 @@ emit_variants:
     mov edi, [r15 + V_FIELD]
     mov esi, [r15 + V_VALUE]
     call emit_var_prop
+    ; emit_var_prop mirrors the base css (declarations end with ';'),
+    ; but a rule needs "decl!important}" - strip the trailing ';' so the
+    ; !important lands inside the declaration (a ';' before it would
+    ; make the rule invalid and the browser would drop it).
+    mov rcx, [out_len]
+    test rcx, rcx
+    jz .have_end
+    cmp byte [out_buf + rcx - 1], ';'
+    jne .have_end
+    dec rcx
+    mov [out_len], rcx
+.have_end:
     lea rdi, [s_var_end]
     call out_str
     inc r13
