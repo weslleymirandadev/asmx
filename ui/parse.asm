@@ -1358,6 +1358,91 @@ class_apply_core:
     mov [r12 + N_GRID_COLS], al
     jmp .done
 .not_gc:
+    ; ---- transitions (2026-08-20) ----
+    ; transition-<suffix>: none/all/colors/opacity/shadow/transform
+    cmp r14d, 11
+    jb .not_transp
+    lea rdi, [r13]
+    lea rsi, [s_transition_prefix]
+    mov rdx, 11
+    call strncmp
+    test rax, rax
+    jnz .not_transp
+    lea rdi, [r13 + 11]
+    mov rsi, r14
+    sub rsi, 11
+    lea rdx, [tw_trans]
+    lea rcx, [tw_trans_end]
+    call tw_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_TRANS], eax
+    jmp .done
+.not_transp:
+    ; transition (bare - Tailwind default property set)
+    cmp r14d, 10
+    jne .not_trans
+    lea rdi, [r13]
+    lea rsi, [s_transition]
+    mov rdx, 10
+    call strncmp
+    test rax, rax
+    jnz .not_trans
+    mov dword [r12 + N_TRANS], 1
+    jmp .done
+.not_trans:
+    ; duration-<n> (transition-duration ms)
+    cmp r14d, 9
+    jb .not_dur
+    lea rdi, [r13]
+    lea rsi, [s_duration]
+    mov rdx, 9
+    call strncmp
+    test rax, rax
+    jnz .not_dur
+    lea rdi, [r13 + 9]
+    mov rsi, r14
+    sub rsi, 9
+    call atoi_n
+    mov [r12 + N_DUR], eax
+    jmp .done
+.not_dur:
+    ; ease-<suffix>: linear/in/out/in-out
+    cmp r14d, 5
+    jb .not_ease
+    lea rdi, [r13]
+    lea rsi, [s_ease]
+    mov rdx, 5
+    call strncmp
+    test rax, rax
+    jnz .not_ease
+    lea rdi, [r13 + 5]
+    mov rsi, r14
+    sub rsi, 5
+    lea rdx, [tw_ease]
+    lea rcx, [tw_ease_end]
+    call tw_lookup
+    cmp rax, -1
+    je .done
+    mov [r12 + N_EASE], eax
+    jmp .done
+.not_ease:
+    ; delay-<n> (transition-delay ms)
+    cmp r14d, 6
+    jb .not_delay
+    lea rdi, [r13]
+    lea rsi, [s_delay]
+    mov rdx, 6
+    call strncmp
+    test rax, rax
+    jnz .not_delay
+    lea rdi, [r13 + 6]
+    mov rsi, r14
+    sub rsi, 6
+    call atoi_n
+    mov [r12 + N_DELAY], eax
+    jmp .done
+.not_delay:
     ; ---- numeric prefixes ----
     ; gap-<n>
     cmp r14d, 4

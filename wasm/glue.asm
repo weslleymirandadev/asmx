@@ -117,6 +117,8 @@ section .data
  db '    const buf = mem(), v = new DataView(buf);', 10
  db '    const n = e.widget_count(), base = e.widgets();', 10
  db '    const stBase = e.styles ? e.styles() : 0;', 10
+ db '    const TPROP = ["","","none","all","color,background-color,border-color,text-decoration-color,fill,stroke","opacity","box-shadow","transform"];', 10
+ db '    const TEASE = ["","linear","cubic-bezier(0.4,0,1,1)","cubic-bezier(0,0,0.2,1)","cubic-bezier(0.4,0,0.2,1)"];', 10
  db '    for (let i = 0; i < n; i++) {', 10
  db '      const o = base + i*32;', 10
  db '      const type = v.getUint8(o);', 10
@@ -130,11 +132,12 @@ section .data
  db '      if (!el || el.tagName !== want) {', 10
  db '        if (el) console.error("ASX Hydration Error: node " + i + " structural mismatch expected <" + want.toLowerCase() + "> got <" + el.tagName.toLowerCase() + "> (re-created, subtree client-rendered)");', 10
  db '        el = document.createElement(want.toLowerCase());', 10
+ db '        el.setAttribute("data-asx-id", String(i));', 10
  db '        byId.set(String(i), el);', 10
  db '        applyAttrs(el, o, v);', 10
  db '      }', 10
  db '      els[i] = el;', 10
- db '      const so = stBase + i*26;', 10
+ db '      const so = stBase + i*32;', 10
  db '      const flags = stBase ? v.getUint32(so,true) : 0;', 10
  db '      const weight = stBase ? v.getUint16(so+4,true) : 0;', 10
  db '      const align = stBase ? v.getUint8(so+6) : 0;', 10
@@ -157,11 +160,16 @@ section .data
  db '      const pr = stBase ? v.getUint8(so+23) : 0;', 10
  db '      const pt = stBase ? v.getUint8(so+24) : 0;', 10
  db '      const pb = stBase ? v.getUint8(so+25) : 0;', 10
+ db '      const trans = stBase ? v.getUint8(so+26) : 0;', 10
+ db '      const ease = stBase ? v.getUint8(so+27) : 0;', 10
+ db '      const dur = stBase ? v.getUint16(so+28,true) : 0;', 10
+ db '      const delay = stBase ? v.getUint16(so+30,true) : 0;', 10
  db '      const bg = type === 0 && !(r === 0 && g === 0 && b === 0 && v.getUint8(o+15) === 0) ? "background:" + hex((r<<16)|(g<<8)|b) + ";" : "";', 10
  db '      const rad = radius === 255 ? "border-radius:9999px;" : (radius ? "border-radius:" + radius + "px;" : "");', 10
  db '      const bd = border ? "border:" + border + "px solid rgba(255,255,255,.2);" : "";', 10
  db '      const op = opacity ? "opacity:" + (opacity/100) + ";" : "";', 10
  db '      const sh = shadow ? "box-shadow:0 8px 24px rgba(0,0,0,.35);" : "";', 10
+ db '      const tr = trans ? "transition-property:" + TPROP[trans] + ";transition-duration:" + (dur || 150) + "ms;transition-timing-function:" + (TEASE[ease] || "cubic-bezier(0.4,0,0.2,1)") + ";" + (delay ? "transition-delay:" + delay + "ms;" : "") : "";', 10
  db '      const padCss = (pl||pr||pt||pb) ? "padding:" + (pt||py||pad) + "px " + (pr||px||pad) + "px " + (pb||py||pad) + "px " + (pl||px||pad) + "px;" : ((px||pad) ? "padding:" + (py||pad) + "px " + (px||pad) + "px;" : "");', 10
  db '      const gapCss = gap ? "gap:" + gap + "px;" : "";', 10
  db '      const mg = (ml||mr) ? "margin:" + mt + "px " + mr + "px " + mb + "px " + ml + "px;" : ((mt||mb) ? "margin:" + mt + "px 0 " + mb + "px;" : "");', 10
@@ -198,7 +206,7 @@ section .data
  db '        const grd = (flags & 65536) ? "position:relative;display:grid;" + (gcols ? "grid-template-columns:repeat(" + gcols + ",1fr);" : "") : "";', 10
  db '        const wrp = (flags & 256) ? "flex-wrap:wrap;" : "";', 10
  db '        const grw = (flags & 512) ? "flex:1 1 0%;" : "";', 10
- db '        const rest = bg + padCss + gapCss + mg + rad + bd + op + sh + ww;', 10
+ db '        const rest = bg + padCss + gapCss + mg + rad + bd + op + sh + tr + ww;', 10
  db '        const css = hid ? "display:none;" : (grd ? grd + rest : "position:relative;display:flex;flex-direction:" + flexDir + ";" + wrp + grw + "align-items:" + items + ";justify-content:" + just + ";" + rest);', 10
  db '        if (el.style.cssText !== css) el.style.cssText = css;', 10
  db '        if (hh) { if (el.style.minHeight !== hh + "px") el.style.minHeight = hh + "px"; }', 10

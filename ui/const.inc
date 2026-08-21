@@ -111,12 +111,21 @@
 %define N_MR         132             ; u32 margin-right (mr-*/me-/mx-)
 %define N_PL         136             ; u32 padding-left (pl-*/ps-/px-)
 %define N_PR         140             ; u32 padding-right (pr-*/pe-/px-)
+; transitions (2026-08-20): transition-* / duration-* / ease-* / delay-*
+%define N_TRANS      144             ; u32 transition-property: 0 none, 1 default,
+                                     ; 2 none, 3 all, 4 colors, 5 opacity,
+                                     ; 6 shadow, 7 transform
+%define N_EASE       148             ; u32 timing: 0 unset, 1 linear, 2 in,
+                                     ; 3 out, 4 in-out
+%define N_DUR        152             ; u32 transition-duration ms (duration-*)
+%define N_DELAY      156             ; u32 transition-delay ms (delay-*)
 
 ; style record size (style_buf): flags u32, weight u16, align, gap, radius,
 ; px, py, border, opacity, shadow, role, pad, mt, mb, h, grid_cols,
-; ml, mr, pl, pr, pt, pb - 26 bytes. Kept in ONE define so emit/ssr/glue
-; stay in sync (glue.asm hardcodes i*26 in its JS string on purpose).
-%define STYLE_REC    26
+; ml, mr, pl, pr, pt, pb, trans, ease, duration u16, delay u16 - 32 bytes.
+; Kept in ONE define so emit/ssr/glue stay in sync (glue.asm hardcodes
+; i*32 in its JS string on purpose).
+%define STYLE_REC    32
 
 ; style flags (N_FLAGS bits - u32 now)
 %define F_FLEX       1

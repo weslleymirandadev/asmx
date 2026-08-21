@@ -802,6 +802,96 @@ ssr_css_view:
     lea rdi, [s_css_sh]
     call out_str
 .no_sh:
+    ; transitions: property + duration (explicit or 150 default) + timing
+    ; (explicit or default bezier) + optional delay
+    movzx r10d, byte [r13 + 26]  ; trans (out_str zeroes al - keep in r10)
+    test r10d, r10d
+    jz .no_trans
+    lea rdi, [s_css_tprop]
+    call out_str
+    cmp r10d, 2
+    je .tp_none
+    cmp r10d, 3
+    je .tp_all
+    cmp r10d, 4
+    je .tp_colors
+    cmp r10d, 5
+    je .tp_opacity
+    cmp r10d, 6
+    je .tp_shadow
+    cmp r10d, 7
+    je .tp_transform
+    lea rdi, [s_tp_default]
+    jmp .tp_done
+.tp_none:
+    lea rdi, [s_tp_none]
+    jmp .tp_done
+.tp_all:
+    lea rdi, [s_tp_all]
+    jmp .tp_done
+.tp_colors:
+    lea rdi, [s_tp_colors]
+    jmp .tp_done
+.tp_opacity:
+    lea rdi, [s_tp_opacity]
+    jmp .tp_done
+.tp_shadow:
+    lea rdi, [s_tp_shadow]
+    jmp .tp_done
+.tp_transform:
+    lea rdi, [s_tp_transform]
+.tp_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    lea rdi, [s_css_tdur]
+    call out_str
+    movzx edi, word [r13 + 28]
+    test edi, edi
+    jnz .have_dur
+    mov edi, 150
+.have_dur:
+    call ssr_dec
+    lea rdi, [s_css_ms]
+    call out_str
+    lea rdi, [s_css_tfn]
+    call out_str
+    movzx eax, byte [r13 + 27]   ; ease
+    cmp eax, 1
+    je .ease_lin
+    cmp eax, 2
+    je .ease_in
+    cmp eax, 3
+    je .ease_out
+    cmp eax, 4
+    je .ease_io
+    lea rdi, [s_ease_inout]
+    jmp .ease_done
+.ease_lin:
+    lea rdi, [s_ease_linear]
+    jmp .ease_done
+.ease_in:
+    lea rdi, [s_ease_in]
+    jmp .ease_done
+.ease_out:
+    lea rdi, [s_ease_out]
+    jmp .ease_done
+.ease_io:
+    lea rdi, [s_ease_inout]
+.ease_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    movzx eax, word [r13 + 30]   ; delay
+    test eax, eax
+    jz .no_trans
+    lea rdi, [s_css_tdelay]
+    call out_str
+    movzx edi, word [r13 + 30]
+    call ssr_dec
+    lea rdi, [s_css_ms]
+    call out_str
+.no_trans:
     ; width: (w && w < 720) ? "width:Npx;" : role ? auto : 100%
     movzx eax, word [rbx + 6]
     test eax, eax

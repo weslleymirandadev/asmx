@@ -939,6 +939,10 @@ var_fields:
     dd N_MR, 4
     dd N_PL, 4
     dd N_PR, 4
+    dd N_TRANS, 4
+    dd N_EASE, 4
+    dd N_DUR, 4
+    dd N_DELAY, 4
     dd N_GRID_COLS, 1
 var_fields_end:
 
@@ -1027,6 +1031,36 @@ tw_shadow:
     dq s_sh_xl, 5
     dq s_sh_2xl, 6
 tw_shadow_end:
+
+; transition-<suffix> -> property id (1 = bare `transition` default)
+s_t_none    db "none", 0
+s_t_all     db "all", 0
+s_t_colors  db "colors", 0
+s_t_opacity db "opacity", 0
+s_t_shadow  db "shadow", 0
+s_t_transform db "transform", 0
+
+tw_trans:
+    dq s_t_none, 2
+    dq s_t_all, 3
+    dq s_t_colors, 4
+    dq s_t_opacity, 5
+    dq s_t_shadow, 6
+    dq s_t_transform, 7
+tw_trans_end:
+
+; ease-<suffix> -> timing id (1 linear 2 in 3 out 4 in-out)
+s_e_linear db "linear", 0
+s_e_in     db "in", 0
+s_e_out    db "out", 0
+s_e_inout  db "in-out", 0
+
+tw_ease:
+    dq s_e_linear, 1
+    dq s_e_in, 2
+    dq s_e_out, 3
+    dq s_e_inout, 4
+tw_ease_end:
 
 ; prefixes for numeric classes (strncmp match on the prefix)
 s_gap_prefix   db "gap-", 0

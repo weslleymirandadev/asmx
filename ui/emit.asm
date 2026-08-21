@@ -521,6 +521,15 @@ build_style_records:
     mov [rdi + 24], al
     movzx eax, byte [rbx + N_PB]
     mov [rdi + 25], al
+    ; transitions (2026-08-20): +26 trans +27 ease +28 duration u16 +30 delay u16
+    movzx eax, byte [rbx + N_TRANS]
+    mov [rdi + 26], al
+    movzx eax, byte [rbx + N_EASE]
+    mov [rdi + 27], al
+    movzx eax, word [rbx + N_DUR]
+    mov [rdi + 28], ax
+    movzx eax, word [rbx + N_DELAY]
+    mov [rdi + 30], ax
     inc r13
     jmp .sloop
 .sloop_done:
@@ -1303,6 +1312,91 @@ emit_var_prop:
     call out_str
     jmp .done
 .not_pb:
+    cmp r12d, N_TRANS
+    jne .not_trans
+    lea rdi, [s_var_tprop]
+    call out_str
+    cmp r13d, 2
+    jne .vt3
+    lea rdi, [s_tp_none]
+    jmp .vt_done
+.vt3:
+    cmp r13d, 3
+    jne .vt4
+    lea rdi, [s_tp_all]
+    jmp .vt_done
+.vt4:
+    cmp r13d, 4
+    jne .vt5
+    lea rdi, [s_tp_colors]
+    jmp .vt_done
+.vt5:
+    cmp r13d, 5
+    jne .vt6
+    lea rdi, [s_tp_opacity]
+    jmp .vt_done
+.vt6:
+    cmp r13d, 6
+    jne .vt7
+    lea rdi, [s_tp_shadow]
+    jmp .vt_done
+.vt7:
+    cmp r13d, 7
+    jne .vt_def
+    lea rdi, [s_tp_transform]
+    jmp .vt_done
+.vt_def:
+    lea rdi, [s_tp_default]
+.vt_done:
+    call out_str
+    jmp .done
+.not_trans:
+    cmp r12d, N_EASE
+    jne .not_ease
+    lea rdi, [s_var_tfn]
+    call out_str
+    cmp r13d, 1
+    jne .ve2
+    lea rdi, [s_ease_linear]
+    jmp .ve_done
+.ve2:
+    cmp r13d, 2
+    jne .ve3
+    lea rdi, [s_ease_in]
+    jmp .ve_done
+.ve3:
+    cmp r13d, 3
+    jne .ve4
+    lea rdi, [s_ease_out]
+    jmp .ve_done
+.ve4:
+    lea rdi, [s_ease_inout]
+.ve_done:
+    call out_str
+    lea rdi, [s_css_semi]
+    call out_str
+    jmp .done
+.not_ease:
+    cmp r12d, N_DUR
+    jne .not_dur
+    lea rdi, [s_var_tdur]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_ms]
+    call out_str
+    jmp .done
+.not_dur:
+    cmp r12d, N_DELAY
+    jne .not_delay
+    lea rdi, [s_var_tdelay]
+    call out_str
+    mov rdi, r13
+    call ssr_dec
+    lea rdi, [s_var_ms]
+    call out_str
+    jmp .done
+.not_delay:
     cmp r12d, N_W
     jne .not_w
     lea rdi, [s_var_w]

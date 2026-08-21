@@ -253,6 +253,12 @@ s_pe          db "pe-", 0
 s_ps          db "ps-", 0
 s_pl          db "pl-", 0
 s_pr          db "pr-", 0
+; transition classes (2026-08-20): transition / transition-* / duration-*
+s_transition  db "transition", 0
+s_transition_prefix db "transition-", 0
+s_duration    db "duration-", 0
+s_ease        db "ease-", 0
+s_delay       db "delay-", 0
 
 ; ----------------------------------------------------------------------
 ; SSR + hydration (ui/ssr.asm): the shell embeds the FULL rendered HTML
@@ -314,6 +320,11 @@ s_var_pl    db 'padding-left:', 0
 s_var_pr    db 'padding-right:', 0
 s_var_pt    db 'padding-top:', 0
 s_var_pb    db 'padding-bottom:', 0
+s_var_tprop db 'transition-property:', 0
+s_var_tdur  db 'transition-duration:', 0
+s_var_tfn   db 'transition-timing-function:', 0
+s_var_tdelay db 'transition-delay:', 0
+s_var_ms    db 'ms;', 0
 s_var_w     db 'width:', 0
 s_var_gap   db 'gap:', 0
 s_var_rad   db 'border-radius:', 0
@@ -375,6 +386,23 @@ s_css_zero_dot db "0.", 0
 s_css_zero    db "0", 0
 s_css_one     db "1;", 0
 s_css_sh      db "box-shadow:0 8px 24px rgba(0,0,0,.35);", 0
+; transitions css (2026-08-20, mirrored in wasm/glue.asm cssText)
+s_css_tprop   db "transition-property:", 0
+s_css_tdur    db "transition-duration:", 0
+s_css_tfn     db "transition-timing-function:", 0
+s_css_tdelay  db "transition-delay:", 0
+s_css_ms      db "ms;", 0
+s_tp_default  db "color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter", 0
+s_tp_none     db "none", 0
+s_tp_all      db "all", 0
+s_tp_colors   db "color,background-color,border-color,text-decoration-color,fill,stroke", 0
+s_tp_opacity  db "opacity", 0
+s_tp_shadow   db "box-shadow", 0
+s_tp_transform db "transform", 0
+s_ease_linear db "linear", 0
+s_ease_in     db "cubic-bezier(0.4,0,1,1)", 0
+s_ease_out    db "cubic-bezier(0,0,0.2,1)", 0
+s_ease_inout  db "cubic-bezier(0.4,0,0.2,1)", 0
 s_css_w       db "width:", 0
 s_css_btn     db "width:auto;align-self:flex-start;cursor:pointer;", 0
 s_css_100     db "width:100%;min-width:0;", 0

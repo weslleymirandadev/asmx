@@ -295,9 +295,13 @@ get_about:
   real element — `@a href="/"` renders `<a href="/">`, `@img src="..."`
   renders `<img src="...">`. `onclick` is special-cased (see Interactive
   elements below); every other attribute is passed through verbatim.
-- **Classes**: `bg-<color> text-<color> text-<size> font-bold p-* m-* mt-*
-  mb-* w-* min-h-screen` — full Tailwind v3 palette (slate→rose, 50–950,
-  black/white) and spacing scale (0→96, px, fractions, screen).
+- **Classes**: `bg-<color> text-<color> text-<size> font-bold p-* px-* py-*
+  pt-* pb-* ps-* pe-* m-* mx-* my-* ms-* me-* ml-* mr-* mt-* mb-* w-*
+  min-h-screen` — full Tailwind v3 palette (slate→rose, 50–950, black/white),
+  spacing scale (0→96, px, fractions, screen) and transitions
+  (`transition` / `transition-all|none|colors|opacity|shadow|transform`,
+  `duration-<n>`, `ease-linear|in|out|in-out`, `delay-<n>` — animate
+  `hover:` / `sm:` / `md:` … changes).
 - **Children**: indentation is the tree. A bare string on its own line is a
   text child of the nearest open tag.
 - `@theme bg #hex text #hex accent #hex` (optional, anywhere in the block).
