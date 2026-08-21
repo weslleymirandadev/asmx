@@ -64,6 +64,7 @@ myapp/
 │   │   └── profile/[id]/page.asx → /profile/:id
 │   ├── components/
 │   └── middleware.asx
+│   └── main.asx
 ├── static/
 └── Makefile
 ```
