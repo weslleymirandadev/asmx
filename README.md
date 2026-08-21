@@ -85,8 +85,8 @@ cd asx-cli && make
 sudo ln -s "$PWD/build/asx" /usr/local/bin/asx   # optional
 
 # Create a new project
-mkdir myapp && cd myapp
 asx init myapp
+cd myapp
 
 # Run
 asx dev
