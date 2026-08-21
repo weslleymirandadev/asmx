@@ -86,7 +86,7 @@ section .data
  db '  if (!document.querySelector("style[data-asx-base]")) {', 10
  db '    const st = document.createElement("style");', 10
  db '    st.setAttribute("data-asx-base", "");', 10
- db '    st.textContent = "*{margin:0;padding:0;box-sizing:border-box}body{min-height:100vh;font-family:ui-sans-serif,system-ui,sans-serif;padding:48px 24px}";', 10
+ db '    st.textContent = "*{margin:0;padding:0;box-sizing:border-box}button{border:none;background:none;font:inherit}body{min-height:100vh;font-family:ui-sans-serif,system-ui,sans-serif;padding:48px 24px}";', 10
  db '    document.head.appendChild(st);', 10
  db '  }', 10
  db '  if (e.ui_theme_bg) document.body.style.background = hex(e.ui_theme_bg());', 10
@@ -134,7 +134,7 @@ section .data
  db '        applyAttrs(el, o, v);', 10
  db '      }', 10
  db '      els[i] = el;', 10
- db '      const so = stBase + i*20;', 10
+ db '      const so = stBase + i*26;', 10
  db '      const flags = stBase ? v.getUint32(so,true) : 0;', 10
  db '      const weight = stBase ? v.getUint16(so+4,true) : 0;', 10
  db '      const align = stBase ? v.getUint8(so+6) : 0;', 10
@@ -151,14 +151,20 @@ section .data
  db '      const mb = stBase ? v.getUint8(so+17) : 0;', 10
  db '      const hh = stBase ? v.getUint8(so+18) : 0;', 10
  db '      const gcols = stBase ? v.getUint8(so+19) : 0;', 10
+ db '      const ml = stBase ? v.getUint8(so+20) : 0;', 10
+ db '      const mr = stBase ? v.getUint8(so+21) : 0;', 10
+ db '      const pl = stBase ? v.getUint8(so+22) : 0;', 10
+ db '      const pr = stBase ? v.getUint8(so+23) : 0;', 10
+ db '      const pt = stBase ? v.getUint8(so+24) : 0;', 10
+ db '      const pb = stBase ? v.getUint8(so+25) : 0;', 10
  db '      const bg = type === 0 && !(r === 0 && g === 0 && b === 0 && v.getUint8(o+15) === 0) ? "background:" + hex((r<<16)|(g<<8)|b) + ";" : "";', 10
  db '      const rad = radius === 255 ? "border-radius:9999px;" : (radius ? "border-radius:" + radius + "px;" : "");', 10
  db '      const bd = border ? "border:" + border + "px solid rgba(255,255,255,.2);" : "";', 10
  db '      const op = opacity ? "opacity:" + (opacity/100) + ";" : "";', 10
  db '      const sh = shadow ? "box-shadow:0 8px 24px rgba(0,0,0,.35);" : "";', 10
- db '      const padCss = (px||pad) ? "padding:" + (py||pad) + "px " + (px||pad) + "px;" : "";', 10
+ db '      const padCss = (pl||pr||pt||pb) ? "padding:" + (pt||py||pad) + "px " + (pr||px||pad) + "px " + (pb||py||pad) + "px " + (pl||px||pad) + "px;" : ((px||pad) ? "padding:" + (py||pad) + "px " + (px||pad) + "px;" : "");', 10
  db '      const gapCss = gap ? "gap:" + gap + "px;" : "";', 10
- db '      const mg = (mt||mb) ? "margin:" + mt + "px 0 " + mb + "px;" : "";', 10
+ db '      const mg = (ml||mr) ? "margin:" + mt + "px " + mr + "px " + mb + "px " + ml + "px;" : ((mt||mb) ? "margin:" + mt + "px 0 " + mb + "px;" : "");', 10
  db '      const flexDir = (flags & 1) ? ((flags & 2) ? "column" : "row") : "column";', 10
  db '      const items = (flags & 4) ? "center" : (flags & 8) ? "flex-end" : (flags & 4194304) ? "flex-start" : "stretch";', 10
  db '      const just = (flags & 16) ? "center" : (flags & 32) ? "space-between" : (flags & 64) ? "flex-end" : (flags & 131072) ? "space-around" : (flags & 262144) ? "space-evenly" : "flex-start";', 10
@@ -170,7 +176,7 @@ section .data
  db '        const tt = (flags & 8192) ? "text-transform:uppercase;" : (flags & 1048576) ? "text-transform:lowercase;" : "";', 10
  db '        const it = (flags & 16384) ? "font-style:italic;" : "";', 10
  db '        const un = (flags & 32768) ? "text-decoration:underline;" : (flags & 2097152) ? "text-decoration:line-through;" : "";', 10
- db '        const mgL = (mt||mb) ? "margin:" + mt + "px 0 " + mb + "px;" : "";', 10
+ db '        const mgL = (ml||mr) ? "margin:" + mt + "px " + mr + "px " + mb + "px " + ml + "px;" : ((mt||mb) ? "margin:" + mt + "px 0 " + mb + "px;" : "");', 10
  db '        const css = "display:block;font-size:" + fs + "px;" + col + fw + ta + tt + it + un + mgL + "line-height:1.4;";', 10
  db '        if (el.style.cssText !== css) el.style.cssText = css;', 10
  db '        const tp = v.getUint32(o+16,true);', 10
