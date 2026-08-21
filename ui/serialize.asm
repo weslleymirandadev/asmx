@@ -10,6 +10,12 @@ visit:
     push r15
     mov r12, rdi
     mov r13, rsi
+    ; bounds check: each node = 1 record, buttons = 2 records.
+    ; Without this, records past MAX_RECORDS overwrite rec_count/theme_bg
+    ; in .bss and serialize[loop] reads garbage node idx -> segfault.
+    mov eax, [rec_count]
+    cmp eax, MAX_RECORDS - 1
+    jge err_records
     imul rax, r12, NODE_SIZE
     lea r14, [nodes + rax]
     mov eax, [rec_count]
@@ -405,6 +411,11 @@ serialize:
     pop r12
     pop rbx
     ret
+
+err_records:
+    lea rdi, [msg_records]
+    mov rsi, msg_records_len
+    call die
 
 ; ----------------------------------------------------------------------
 ; emit_shell - <label>_shell: db '<div id="ui" data-modules="/<ui_name>.wasm"></div>', 10

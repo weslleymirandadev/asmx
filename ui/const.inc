@@ -40,7 +40,7 @@
 %define NODE_SIZE    256
 %define MAX_NODES    128
 %define MAX_STACK    32
-%define MAX_RECORDS  128
+%define MAX_RECORDS  256
 
 ; @@ components (expand.asm)
 %define MAX_ARGS        16

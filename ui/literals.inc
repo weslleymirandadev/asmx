@@ -27,6 +27,8 @@ msg_depth     db "ui-compile: profundidade maxima (32)", 10
 msg_depth_len equ $ - msg_depth
 msg_blob      db "ui-compile: blob too big (>8KB)", 10
 msg_blob_len  equ $ - msg_blob
+msg_records   db "ui-compile: muitos records (limite 256; cada botao = 2)", 10
+msg_records_len equ $ - msg_records
 msg_tag       db "ui-compile: unknown tag: ", 0
 msg_tag_len   equ $ - msg_tag - 1        ; without the null (token follows)
 msg_nl        db 10, 0

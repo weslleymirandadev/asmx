@@ -1312,6 +1312,20 @@ parse_attr:
     jge .attr_done
     lea r15, [attr_buf + rax]   ; write cursor (callee-saved, no calls)
     mov r11, r15                ; start pointer (for the length)
+    ; separator: a node's attr string is a concatenation of multiple
+    ; 'name="value"' chunks. Emit a leading space before EACH attr except
+    ; the very first one (the SSR already writes one space before the
+    ; whole string). Without this, 'href="..."target="..."' merges into a
+    ; single broken token and the browser drops the href.
+    ; sentinel = attr_len (0 = first attr; attr_len>0 means we already
+    ; wrote one, so emit a separator). attr_off==0 is NOT usable as a
+    ; flag: 0 is a valid attr_buf offset when attr_cur is 0.
+    mov eax, [attr_len + rbx*4]
+    test eax, eax
+    jz .no_sep
+    mov byte [r15], ' '
+    add r15, 1
+.no_sep:
     ; name
     mov rcx, r13
     lea rsi, [in_buf + r12]
@@ -1341,16 +1355,39 @@ parse_attr:
     inc r8
     jmp .av_copy
 .av_done:
-    add r15, r8
-    ; '"' (no trailing space - the SSR adds separators itself)
-    mov byte [r15], '"'
+    add r15, r8                 ; r15 = end of attr content in attr_buf
+    mov byte [r15], '"'         ; closing quote
     add r15, 1
-    ; record the extent in attr_off/attr_len of the node
+    ; length of THIS attr (name="value"): end - start
+    sub r15, r11                ; r15 = this attr length (for the cursor advance)
+    ; --- record extent of the node's attr string in attr_off/attr_len ---
+    ; A node may carry MULTIPLE attrs (href + target, etc.). The string pool
+    ; is contiguous: attr_cur advances by each attr; attr_off is the START
+    ; of the FIRST attr, attr_len is the TOTAL span (cursor - start).
+    ; attr_len is the sentinel for "first attr": it is 0 (BSS) until the
+    ; first attr writes it, so we can't reuse attr_off==0 (0 is a valid
+    ; offset when attr_cur happens to be 0). Reusing attr_off here caused
+    ; the 2nd+ attrs to think they were the first, re-basing attr_off/
+    ; attr_len and dropping every attr before the last (e.g. @a
+    ; href="..." target="...": href was lost because target re-based off=0).
+    mov eax, [attr_len + rbx*4]
+    test eax, eax
+    jnz .have_first_len
+    ; first attr for this node: remember the start (cursor BEFORE this attr)
+    ; = current attr_cur (we haven't advanced it yet for this attr)
     mov rax, [attr_cur]
     mov [attr_off + rbx*4], eax
-    sub r15, r11                ; length written
-    mov [attr_len + rbx*4], r15d
-    add [attr_cur], r15
+.have_first_len:
+    ; advance the cursor by this attr's length
+    mov rax, [attr_cur]
+    add rax, r15                ; r15 = this attr's length
+    mov [attr_cur], rax
+    ; total span = cursor (now after this attr) - first start
+    mov r8d, [attr_off + rbx*4]
+    mov eax, [attr_cur]
+    sub eax, r8d
+    mov [attr_len + rbx*4], eax
+    mov r15, rax                ; restore r15 to a usable scratch (attr done)
 .attr_done:
 .done:
     pop r15
