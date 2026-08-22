@@ -34,12 +34,24 @@ section .data
     err_ct  db "Content-Type: text/plain; charset=utf-8", 13, 10, 0
     ERR_MAX equ 16384
     ; NOTE: JS uses double quotes only (fits db '...' without escapes)
-    ; the renderer lives in wasm/glue.js (plain JS - real editor syntax
-    ; highlighting, no db '...' escaping). Embedded with incbin (resolved
-    ; through the -I paths: -I asx in the root Makefile, -I .. in
-    ; tests/Makefile). The trailing NUL keeps glue_js_len unchanged (the
-    ; old db blob ended with 0).
-    glue_js: incbin "wasm/glue.js"
+    ; the renderer lives in wasm/glue/*.js - SEVEN plain-JS modules
+    ; (real editor syntax highlighting, no db '...' escaping). Embedded
+    ; with SEVEN consecutive incbins: nasm emits the bytes contiguously
+    ; in this section, so glue_js points at the concatenated bundle and
+    ; glue_js_len is their total length - no generated glue.js file, no
+    ; Makefile cat step. The module ORDER below is the bundle order
+    ; (const -> state -> mount -> shell -> spa -> overlay -> boot: const/
+    ; state first, boot last). Paths resolve through -I asx / -I ...
+    ; (root and tests Makefiles). The trailing NUL keeps glue_js_len
+    ; unchanged (the old db blob ended with 0).
+    glue_js:
+        incbin "wasm/glue/const.js"
+        incbin "wasm/glue/state.js"
+        incbin "wasm/glue/mount.js"
+        incbin "wasm/glue/shell.js"
+        incbin "wasm/glue/spa.js"
+        incbin "wasm/glue/overlay.js"
+        incbin "wasm/glue/boot.js"
     db 0
     glue_js_len equ $ - glue_js - 1
     glue_ct db "Content-Type: text/javascript", 13, 10, 0
