@@ -75,9 +75,27 @@ expand_block:
     dec qword [comp_depth]
     jmp .pop
 .no_pop:
-    ; "@@"? (custom component instantiation: @@card key="value")
+    ; "@import <Name> from "@/path""? (Next.js-style component import,
+    ; alias @/ = src/; supports subfolders: @/components/ui/Button)
     cmp rbx, r15
     jge .next_line
+    cmp byte [in_buf + rbx], '@'
+    jne .next_line
+    ; check for the "@import " prefix (7 chars + space)
+    lea rdi, [in_buf + rbx]     ; line start POINTER
+    lea rsi, [in_buf + r15]     ; line end POINTER (r15 is an offset)
+    call check_import_prefix    ; rax = 1 if the line starts with "@import "
+    test rax, rax
+    jz .imp_no
+    ; parse "<Name> from "path"" -> comp_name + import_path
+    lea rdi, [in_buf + rbx + 7] ; after "@import "
+    lea rsi, [in_buf + r15]
+    call parse_import
+    ; load the file at the resolved path (src/<path>.asx)
+    call load_component_import
+    jmp .imp_loaded
+.imp_no:
+    ; "@@"? (custom component instantiation: @@card key="value")
     cmp byte [in_buf + rbx], '@'
     jne .next_line
     lea r8, [rbx + 1]
@@ -100,6 +118,7 @@ expand_block:
 .no_chl_ext:
     ; load src/components/<name>.asx into comp_buf
     call load_component
+.imp_loaded:
     ; find the <name>: block inside comp_buf
     call find_comp_block        ; rax = content start, rdx = content end
     mov r14, rax
@@ -187,6 +206,8 @@ parse_comp_args:
     jmp .lead
 .lead_done:
     ; --- name: [r12, r14) ---
+    ; ':' (children) also ends the name: "@@Card:" -> name "Card",
+    ; the ':' belongs to the children syntax, not the component name.
     mov r14, r12
 .sn:
     cmp r14, r13
@@ -195,6 +216,8 @@ parse_comp_args:
     cmp al, ' '
     je .sn_done
     cmp al, 9
+    je .sn_done
+    cmp al, ':'
     je .sn_done
     inc r14
     jmp .sn
@@ -517,6 +540,242 @@ load_component:
 .err:
     lea rdi, [msg_comp_missing]
     mov rsi, msg_comp_missing_len
+    call die
+
+; ----------------------------------------------------------------------
+; check_import_prefix(rdi = line start, rsi = line end ptr)
+; -> rax = 1 if the line starts with the "@import " keyword (7 chars +
+; a space/tab), else 0. The line must NOT be "@@" (handled separately).
+; ----------------------------------------------------------------------
+check_import_prefix:
+    push r12
+    push r13
+    mov r12, rdi
+    mov r13, rsi
+    ; need at least 8 chars ("@import" + separator)
+    lea r8, [r12 + 7]
+    cmp r8, r13
+    jae .no
+    lea rdi, [r12]
+    lea rsi, [s_import]
+    mov rdx, 7
+    call strncmp
+    test rax, rax
+    jnz .no
+    ; separator must be space or tab (so "@imported" does not match)
+    mov al, [r12 + 7]
+    cmp al, ' '
+    je .yes
+    cmp al, 9
+    je .yes
+    jmp .no
+.yes:
+    mov rax, 1
+    jmp .done
+.no:
+    xor rax, rax
+.done:
+    pop r13
+    pop r12
+    ret
+
+; ----------------------------------------------------------------------
+; parse_import(rdi = ptr after "@import ", rsi = line end ptr)
+; Parses "<Name> from "path"" into comp_name/comp_name_len and
+; import_path/import_path_len. The path may use the "@/" alias (= src/);
+; it is kept verbatim (the alias is resolved in load_component_import).
+; ----------------------------------------------------------------------
+parse_import:
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi                ; cur (after "@import ")
+    mov r13, rsi                ; line end
+    ; --- skip leading spaces/tabs (the separator after "@import") ---
+.lead:
+    cmp r12, r13
+    jge .err
+    mov al, [r12]
+    cmp al, ' '
+    je .lead_inc
+    cmp al, 9
+    jne .lead_done
+.lead_inc:
+    inc r12
+    jmp .lead
+.lead_done:
+    ; --- name: [r12, r14) ---
+    mov r14, r12
+.sn:
+    cmp r14, r13
+    jge .err
+    mov al, [r14]
+    cmp al, ' '
+    je .sn_done
+    cmp al, 9
+    je .sn_done
+    inc r14
+    jmp .sn
+.sn_done:
+    mov rax, r14
+    sub rax, r12
+    mov [comp_name_len], rax
+    cmp rax, 64
+    jge .err
+    xor r8, r8
+.cp:
+    cmp r8, rax
+    jge .cp_done
+    mov cl, [r12 + r8]
+    mov [comp_name + r8], cl
+    inc r8
+    jmp .cp
+.cp_done:
+    ; --- expect "from" ---
+    mov r15, r14
+.fs:
+    cmp r15, r13
+    jge .err
+    mov al, [r15]
+    cmp al, ' '
+    je .f_inc
+    cmp al, 9
+    jne .f_have
+.f_inc:
+    inc r15
+    jmp .fs
+.f_have:
+    lea rdi, [r15]
+    lea rsi, [s_from]
+    mov rdx, 4
+    call strncmp
+    test rax, rax
+    jnz .err
+    add r15, 4
+    ; --- expect '"' ---
+.qt:
+    cmp r15, r13
+    jge .err
+    mov al, [r15]
+    cmp al, ' '
+    je .q_inc
+    cmp al, 9
+    jne .q_have
+.q_inc:
+    inc r15
+    jmp .qt
+.q_have:
+    cmp byte [r15], '"'
+    jne .err
+    inc r15                     ; skip the opening quote
+    ; --- path: [r15, r16) until the closing quote ---
+    mov r14, r15
+.ps:
+    cmp r14, r13
+    jge .err
+    cmp byte [r14], '"'
+    je .ps_done
+    inc r14
+    jmp .ps
+.ps_done:
+    mov rax, r14
+    sub rax, r15
+    mov [import_path_len], rax
+    cmp rax, 512
+    jge .err
+    xor r8, r8
+.ip:
+    cmp r8, rax
+    jge .ip_done
+    mov cl, [r15 + r8]
+    mov [import_path + r8], cl
+    inc r8
+    jmp .ip
+.ip_done:
+    xor rax, rax
+    jmp .done
+.err:
+    lea rdi, [msg_import_bad]
+    mov rsi, msg_import_bad_len
+    call die
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    ret
+
+; ----------------------------------------------------------------------
+; load_component_import - resolves import_path (the "@/" alias becomes
+; "src/") into comp_path and reads the file into comp_buf. Appends
+; ".asx" unless the path already ends with it.
+; ----------------------------------------------------------------------
+load_component_import:
+    push r12
+    push r13
+    push r14
+    push r15
+    ; comp_path = "" (reset)
+    lea rdi, [comp_path]
+    mov byte [rdi], 0
+    ; path ptr/len: skip the "@/" alias if present
+    lea r12, [import_path]
+    mov r13, [import_path_len]
+    cmp r13, 2
+    jb .no_alias
+    cmp byte [r12], '@'
+    jne .no_alias
+    cmp byte [r12 + 1], '/'
+    jne .no_alias
+    add r12, 2
+    sub r13, 2
+.no_alias:
+    ; if the path starts with "/", it is relative to src/ as well
+    ; (e.g. "@/components/Header" -> "src/components/Header.asx")
+    lea rdi, [comp_path]
+    lea rsi, [s_src_prefix]
+    call strcpy_l               ; comp_path = "src/"
+    ; append the path
+    mov rdi, rax
+    mov rsi, r12
+    mov rdx, r13
+    call memcpy
+    ; append ".asx" unless the path already ends with it
+    lea r15, [comp_path + 4 + r13]  ; end of "src/" + path
+    cmp r13, 4
+    jb .add_ext
+    lea rdi, [r15 - 4]
+    lea rsi, [s_dot_asx]
+    mov rdx, 4
+    call strncmp
+    test rax, rax
+    jz .have_ext
+.add_ext:
+    mov byte [r15], '.'
+    mov byte [r15 + 1], 'a'
+    mov byte [r15 + 2], 's'
+    mov byte [r15 + 3], 'x'
+    mov byte [r15 + 4], 0
+    jmp .read
+.have_ext:
+    mov byte [r15], 0
+.read:
+    lea rdi, [comp_path]
+    lea rsi, [comp_buf]
+    mov rdx, IN_CAP
+    call read_file_to
+    test rax, rax
+    js .err
+    mov [comp_len], rax
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    ret
+.err:
+    lea rdi, [msg_import_missing]
+    mov rsi, msg_import_missing_len
     call die
 
 ; ----------------------------------------------------------------------
