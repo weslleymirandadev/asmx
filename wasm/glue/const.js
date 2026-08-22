@@ -10,11 +10,11 @@
 //
 // Phase machine: SSR -> HYDRATING -> INTERACTIVE (per mount).
 //
-// NOTE: this file is GENERATED - it is the concatenation of the modules
-// in wasm/glue/ (const.js, state.js, mount.js, shell.js, spa.js,
-// overlay.js, boot.js) produced by the Makefile rule:
-//   wasm/glue.js: wasm/glue/*.js  ->  cat $^ > $@
-// Edit the MODULES, never this file.
+// NOTE: this file is ONE of seven modules (const.js, state.js, mount.js,
+// shell.js, spa.js, overlay.js, boot.js) that glue.asm embeds with
+// consecutive incbins - nasm concatenates them at assembly time, so there
+// is no generated glue.js bundle file. The ORDER is fixed in glue.asm.
+// Edit any module freely; `make` rebuilds the glue.o when one changes.
 // =============================================================================
 
 const TAG_NAMES = ["div","main","div","section","nav","header","footer","article","aside","figure","blockquote","ul","ol","li","form","table","thead","tbody","tfoot","tr","td","th","details","dialog","video","audio","picture","iframe","canvas","select","textarea","fieldset","dl","dt","dd","menu","hgroup","h1","h2","h3","h4","h5","h6","p","span","a","label","strong","em","code","pre","small","b","i","u","mark","time","cite","q","abbr","sub","sup","kbd","samp","var","del","ins","s","option","figcaption","legend","caption","summary","button","img","input","br","hr","source","meta","link","area","base","col","embed","track","wbr"];
