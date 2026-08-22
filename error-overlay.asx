@@ -1,0 +1,28 @@
+; asx/error-overlay.asx - framework-internal build-error overlay
+; (Next.js style). NOT a route: this file exists only to be compiled
+; by ui-compile into a standalone WASM module (static/_asx/error-overlay.wasm)
+; that the glue mounts into a fixed container when /_asx/error returns 200.
+;
+; The marker text "ASX_ERROR_TEXT" is replaced by the glue with the real
+; error text after mount (same idea as the {slug} placeholder, but done
+; DOM-side because the ui-compile treats {...} as state interpolation).
+
+section .data
+    err_overlay:
+        @theme bg #09090b text #f4f4f5 accent #ef4444
+        @main p-8 gap-4
+            @div flex items-center gap-3
+                @div w-3 h-3 rounded-full bg-red-500 animate-pulse
+                @h1 text-xl font-black tracking-tight:
+                    "Build Error"
+            @end
+            @div w-full h-px bg-white opacity-10
+            @p font-mono text-sm leading-relaxed text-red-300 break-words:
+                "ASX_ERROR_TEXT"
+            @end
+        @end
+page err_overlay_page
+section .SERVER
+err_overlay_page:
+    res.content err_overlay
+    asx.next
