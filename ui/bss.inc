@@ -61,6 +61,14 @@ import_paths: resb MAX_IMPORTS * 512    ; resolved path ("src/...")
 import_count: resq 1
 ; error message buffer: "cannot read imported component file: <path>"
 import_err_buf: resb 1024
+; GCC-style error formatting scratch (errors.asm)
+num_buf:       resb 24
+; current file + line for GCC-style errors (set by the @import callers)
+err_file_ptr:  resq 1           ; pointer to a STABLE null-terminated path
+err_file_len:  resq 1
+err_line_off:  resq 1           ; offset of the error line in its buffer
+err_buf_ptr:   resq 1           ; which buffer (in_buf or comp_buf)
+err_file_name: resb 512         ; stable copy of comp_path for nested errors
 comp_stack:   resb MAX_COMP_DEPTH * 8
 comp_depth:   resq 1
 save_label_buf: resb 64
