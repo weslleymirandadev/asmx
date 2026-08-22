@@ -9,6 +9,10 @@ section .data
             state count: int = 0
             @p text-2xl tracking-wide:
                 "count: {count}"
+            @a href="/about" text-blue-400 underline mt-4:
+                "Go to /about"
+            @a href="/contact" text-blue-400 underline ml-4:
+                "Go to /contact"
             @button onclick="count++" bg-violet-500 p-4 rounded-xl font-bold transition-colors duration-300 ease-in-out hover:bg-violet-400:
                 "CLICK HERE"
             @button onclick="count = 0" p-4 rounded-xl text-gray-300 animate-pulse:
