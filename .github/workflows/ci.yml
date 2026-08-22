@@ -32,7 +32,12 @@ jobs:
         run: |
           curl -s http://localhost:3000/ -o /tmp/hv_hyd.html
           curl -s http://localhost:3000/_asx/glue.js -o /tmp/hv_glue.js
-          node tests/hydration_test.mjs /tmp/hv_hyd.html /tmp/hv_glue.js tests/build/static/index.wasm
+          node tests/hydration_test.mjs /tmp/hv_hyd.html /tmp/hv_glue.js tests/static/app/page.wasm
+
+      - name: SPA navigation + hot-reload suite (real glue, real routes)
+        run: |
+          curl -s http://localhost:3000/_asx/glue.js -o /tmp/hv_glue.js
+          node tests/spa_test.mjs /tmp/hv_glue.js
 
       - name: HTTP parser fuzz (black-box, server must survive)
         run: node tests/fuzz_http.mjs 500
@@ -44,7 +49,7 @@ jobs:
           (async () => {
             const html = fs.readFileSync("/tmp/hv_hyd.html", "utf8");
             const m = html.match(/data-asx-checksum="([0-9a-f]+)"/);
-            const bytes = fs.readFileSync("tests/build/static/index.wasm");
+            const bytes = fs.readFileSync("tests/static/app/page.wasm");
             const { instance } = await WebAssembly.instantiate(bytes, { env: { fetch_req: () => 200 } });
             const e = instance.exports;
             e.render();
@@ -54,6 +59,7 @@ jobs:
           })();
           '
           curl -sf -o /dev/null http://localhost:3000/about || true
+          curl -sf -o /dev/null http://localhost:3000/contact || true
           curl -sf -o /dev/null http://localhost:3000/api/hello
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/missing)" = "404"
           echo "routes OK"
