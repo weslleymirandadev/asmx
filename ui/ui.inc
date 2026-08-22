@@ -7,6 +7,7 @@
 %include "ui/bss.inc"
 %include "ui/main.asm"
 %include "ui/io.asm"
+%include "ui/errors.asm"
 %include "ui/process.asm"
 %include "ui/expand.asm"
 %include "ui/parse.asm"
