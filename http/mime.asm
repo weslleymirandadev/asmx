@@ -21,6 +21,24 @@ section .data
     ct_png_len equ $ - ct_png
     ct_jpg  db "Content-Type: image/jpeg", 13, 10
     ct_jpg_len equ $ - ct_jpg
+    ct_gif  db "Content-Type: image/gif", 13, 10
+    ct_gif_len equ $ - ct_gif
+    ct_webp db "Content-Type: image/webp", 13, 10
+    ct_webp_len equ $ - ct_webp
+    ct_svg  db "Content-Type: image/svg+xml", 13, 10
+    ct_svg_len equ $ - ct_svg
+    ct_avif db "Content-Type: image/avif", 13, 10
+    ct_avif_len equ $ - ct_avif
+    ct_ico  db "Content-Type: image/x-icon", 13, 10
+    ct_ico_len equ $ - ct_ico
+    ct_mp4  db "Content-Type: video/mp4", 13, 10
+    ct_mp4_len equ $ - ct_mp4
+    ct_webm db "Content-Type: video/webm", 13, 10
+    ct_webm_len equ $ - ct_webm
+    ct_ogg  db "Content-Type: video/ogg", 13, 10
+    ct_ogg_len equ $ - ct_ogg
+    ct_mov  db "Content-Type: video/quicktime", 13, 10
+    ct_mov_len equ $ - ct_mov
     ct_octet db "Content-Type: application/octet-stream", 13, 10
     ct_octet_len equ $ - ct_octet
 
@@ -31,6 +49,15 @@ section .data
     ext_png  db ".png", 0
     ext_jpg  db ".jpg", 0
     ext_jpeg db ".jpeg", 0
+    ext_gif  db ".gif", 0
+    ext_webp db ".webp", 0
+    ext_svg  db ".svg", 0
+    ext_avif db ".avif", 0
+    ext_ico  db ".ico", 0
+    ext_mp4  db ".mp4", 0
+    ext_webm db ".webm", 0
+    ext_ogg  db ".ogg", 0
+    ext_mov  db ".mov", 0
     ext_json db ".json", 0
     ext_txt  db ".txt", 0
 
@@ -96,6 +123,51 @@ mime_lookup:
     call strcmp
     test rax, rax
     jz .jpg
+    lea rsi, [ext_gif]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .gif
+    lea rsi, [ext_webp]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .webp
+    lea rsi, [ext_svg]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .svg
+    lea rsi, [ext_avif]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .avif
+    lea rsi, [ext_ico]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .ico
+    lea rsi, [ext_mp4]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .mp4
+    lea rsi, [ext_webm]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .webm
+    lea rsi, [ext_ogg]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .ogg
+    lea rsi, [ext_mov]
+    mov rdi, r12
+    call strcmp
+    test rax, rax
+    jz .mov
     lea rsi, [ext_json]
     mov rdi, r12
     call strcmp
@@ -131,6 +203,42 @@ mime_lookup:
 .jpg:
     lea rax, [ct_jpg]
     mov rdx, ct_jpg_len
+    jmp .done
+.gif:
+    lea rax, [ct_gif]
+    mov rdx, ct_gif_len
+    jmp .done
+.webp:
+    lea rax, [ct_webp]
+    mov rdx, ct_webp_len
+    jmp .done
+.svg:
+    lea rax, [ct_svg]
+    mov rdx, ct_svg_len
+    jmp .done
+.avif:
+    lea rax, [ct_avif]
+    mov rdx, ct_avif_len
+    jmp .done
+.ico:
+    lea rax, [ct_ico]
+    mov rdx, ct_ico_len
+    jmp .done
+.mp4:
+    lea rax, [ct_mp4]
+    mov rdx, ct_mp4_len
+    jmp .done
+.webm:
+    lea rax, [ct_webm]
+    mov rdx, ct_webm_len
+    jmp .done
+.ogg:
+    lea rax, [ct_ogg]
+    mov rdx, ct_ogg_len
+    jmp .done
+.mov:
+    lea rax, [ct_mov]
+    mov rdx, ct_mov_len
     jmp .done
 .json:
     lea rax, [ct_json]
