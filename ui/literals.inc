@@ -66,10 +66,11 @@ c_caret      db "^", 0
 s_error      db "error", 0
 err_msg_base db "cannot read imported component file: ", 0
 err_msg_base_len equ $ - err_msg_base - 1   ; exclude the null
-g_gutter     db "  |", 10, 0
-g_pad        db "   ", 0
+; N spaces for dynamic gutter alignment (N up to 16 covers line numbers
+; up to 9999999999999999 - way beyond any real source file)
+c_spaces     db "                "
+g_pipe_nl    db "|", 10, 0
 g_bar        db " | ", 0
-g_caret_pad  db "  | ", 0
 msg_import_max db "ui-compile: too many @imports (limit 32)", 10
 msg_import_max_len equ $ - msg_import_max
 msg_import_name db "ui-compile: @import name too long (max 63)", 10
