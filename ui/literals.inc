@@ -44,6 +44,14 @@ msg_comp_args  db "ui-compile: invalid @@ component arguments", 10
 msg_comp_args_len equ $ - msg_comp_args
 s_components   db "src/components/", 0
 s_children     db "children", 0
+s_import       db "@import", 0
+s_from         db "from", 0
+s_src_prefix   db "src/", 0
+s_dot_asx      db ".asx", 0
+msg_import_bad db "ui-compile: invalid @import (expected: @import Name from ", 34, "@/path", 34, ")", 10
+msg_import_bad_len equ $ - msg_import_bad
+msg_import_missing db "ui-compile: cannot read imported component file", 10
+msg_import_missing_len equ $ - msg_import_missing
 
 ; --- literais do output (shell no page.s + WAT) ---
 s_sh1         db "_shell: db ", 0
