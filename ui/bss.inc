@@ -53,6 +53,12 @@ comp_name:    resb 64
 comp_name_len: resq 1
 import_path:  resb 512
 import_path_len: resq 1
+; import registry: @import Name from "path" - one entry per import, keyed
+; by the local name. @@Name looks the name up HERE (no more implicit
+; src/components/ lookup): a component must be imported before use.
+import_keys:  resb MAX_IMPORTS * 64     ; name (null-terminated)
+import_paths: resb MAX_IMPORTS * 512    ; resolved path ("src/...")
+import_count: resq 1
 comp_stack:   resb MAX_COMP_DEPTH * 8
 comp_depth:   resq 1
 save_label_buf: resb 64
