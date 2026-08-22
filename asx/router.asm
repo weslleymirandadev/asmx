@@ -132,10 +132,14 @@ middleware_continue:
     jmp requests
 .static_fallback:
     ; Next.js-style static fallback: no route matched, try public/<path>
-    ; (GET only - static files are not endpoints for other methods)
+    ; (user assets - images, videos) then static/<path> (route wasm).
+    ; GET and HEAD only - static files are not endpoints for other methods.
     call http_get_method_idx
     test rax, rax
-    jnz .nf_route
+    jz .sf_get
+    cmp rax, HTTP_M_HEAD
+    jne .nf_route
+.sf_get:
     lea rdi, [route]
     call http_serve_static
     test rax, rax
