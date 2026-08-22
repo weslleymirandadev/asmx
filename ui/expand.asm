@@ -664,11 +664,12 @@ parse_import:
     ret
 
 ; ----------------------------------------------------------------------
-; load_component_import - resolves import_path (the "@/" alias becomes
-; "src/") into comp_path and reads the file into comp_buf. Appends
-; ".asx" unless the path already ends with it.
+; build_import_path - resolves import_path (the "@/" alias becomes
+; "src/") into comp_path, appending ".asx" unless the path already
+; ends with it. Used by load_component_import AND register_import
+; (which validates the file exists at import time, %include-style).
 ; ----------------------------------------------------------------------
-load_component_import:
+build_import_path:
     push r12
     push r13
     push r14
@@ -714,10 +715,27 @@ load_component_import:
     mov byte [r15 + 2], 's'
     mov byte [r15 + 3], 'x'
     mov byte [r15 + 4], 0
-    jmp .read
+    jmp .done
 .have_ext:
     mov byte [r15], 0
-.read:
+.done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    ret
+
+; ----------------------------------------------------------------------
+; load_component_import - resolves import_path (the "@/" alias becomes
+; "src/") into comp_path and reads the file into comp_buf. Appends
+; ".asx" unless the path already ends with it.
+; ----------------------------------------------------------------------
+load_component_import:
+    push r12
+    push r13
+    push r14
+    push r15
+    call build_import_path      ; comp_path = "src/..." (+ ".asx")
     lea rdi, [comp_path]
     lea rsi, [comp_buf]
     mov rdx, IN_CAP
@@ -779,11 +797,61 @@ register_import:
 .cp2_done:
     mov byte [import_paths + r13 + rbx], 0
     inc qword [import_count]
+    ; validate the file exists NOW (%include-style): a typo'd path must
+    ; fail even if the component is never @@used. open() + close() only -
+    ; the real read happens in load_component_import when @@Name runs.
+    push r12
+    push r13
+    call build_import_path      ; comp_path = "src/..." (+ ".asx")
+    mov rax, SYS_open
+    lea rdi, [comp_path]
+    mov rsi, O_RDONLY
+    syscall
+    test rax, rax
+    js .missing
+    mov r12, rax                ; fd
+    mov rax, SYS_close
+    mov rdi, r12
+    syscall
+    pop r13
+    pop r12
     pop r14
     pop r13
     pop r12
     pop rbx
     ret
+.missing:
+    pop r13
+    pop r12
+    ; print "ui-compile: cannot read imported component file: <path>" and exit
+    lea rdi, [import_err_buf]
+    lea rsi, [msg_import_missing]
+    mov rdx, msg_import_missing_len
+    call memcpy                 ; copy the base message
+    lea rdi, [import_err_buf + msg_import_missing_len - 1]  ; overwrite the \n
+    mov byte [rdi], ':'
+    mov byte [rdi + 1], ' '
+    ; append comp_path
+    lea rsi, [comp_path]
+    mov rdx, 0
+.cplen:
+    cmp byte [rsi + rdx], 0
+    je .cp_done
+    inc rdx
+    jmp .cplen
+.cp_done:
+    lea rdi, [import_err_buf + msg_import_missing_len + 1]
+    call memcpy
+    ; trailing newline
+    lea rdi, [import_err_buf + msg_import_missing_len + 1 + rdx]
+    mov byte [rdi], 10
+    ; write to stderr (fd 2)
+    mov rax, SYS_write
+    mov rdi, 2
+    lea rsi, [import_err_buf]
+    lea rdx, [msg_import_missing_len + 1 + rdx + 1]
+    syscall
+    exit_code 1
 .full:
     lea rdi, [msg_import_max]
     mov rsi, msg_import_max_len
