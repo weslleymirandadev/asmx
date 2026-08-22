@@ -53,6 +53,7 @@ section .data
     banner_post db 10, 0
     s_glue      db '/_asx/glue.js', 0
     s_events    db '/_asx/events', 0
+    s_error     db '/_asx/error', 0
     br_err      db 'Error', 0
     br_colon    db ': port ', 0
     br_mid      db ' already in use, starting server at ', 0
@@ -215,6 +216,14 @@ log_request:
     lea rdi, [route]
     lea rsi, [s_events]
     mov rdx, 13
+    call strncmp
+    test rax, rax
+    jz .first
+    ; /_asx/error (frontend build-error overlay polling - every 1.5s,
+    ; silent so the dev log stays readable)
+    lea rdi, [route]
+    lea rsi, [s_error]
+    mov rdx, 12
     call strncmp
     test rax, rax
     jz .first
