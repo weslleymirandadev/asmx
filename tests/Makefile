@@ -44,7 +44,10 @@ $(BUILD)/pkg/%.o: $(PKG)/%.asm | $(BUILD)
 	@mkdir -p $(dir $@)
 	$(AS) -f elf64 -I $(PKG) -o $@ $<
 
-# the glue module embeds wasm/glue.js via incbin - rebuild when it changes
+# the glue module embeds wasm/glue.js via incbin - rebuild when it changes.
+# glue.js is GENERATED from wasm/glue/*.js modules (see root Makefile).
+$(PKG)/wasm/glue.js: $(wildcard $(PKG)/wasm/glue/*.js)
+	@cat $(sort $(wildcard $(PKG)/wasm/glue/*.js)) > $@
 $(BUILD)/pkg/wasm/glue.o: $(PKG)/wasm/glue.js
 
 $(BUILD)/app/%.o: $(APP)/%.asm | $(BUILD)
