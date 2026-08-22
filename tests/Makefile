@@ -44,14 +44,10 @@ $(BUILD)/pkg/%.o: $(PKG)/%.asm | $(BUILD)
 	@mkdir -p $(dir $@)
 	$(AS) -f elf64 -I $(PKG) -o $@ $<
 
-# the glue module embeds wasm/glue.js via incbin - rebuild when it changes.
-# glue.js is GENERATED from wasm/glue/*.js modules in EXPLICIT order
-# (const -> state -> mount -> shell -> spa -> overlay -> boot; a wildcard
-# sort would scramble boot before const and break the bundle).
-GLUE_SRCS := $(PKG)/wasm/glue/const.js $(PKG)/wasm/glue/state.js $(PKG)/wasm/glue/mount.js $(PKG)/wasm/glue/shell.js $(PKG)/wasm/glue/spa.js $(PKG)/wasm/glue/overlay.js $(PKG)/wasm/glue/boot.js
-$(PKG)/wasm/glue.js: $(GLUE_SRCS)
-	@cat $(GLUE_SRCS) > $@
-$(BUILD)/pkg/wasm/glue.o: $(PKG)/wasm/glue.js
+# the glue module embeds wasm/glue/*.js via SEVEN consecutive incbins
+# (nasm concatenates them - no generated glue.js file). Rebuild when any
+# module changes; the bundle ORDER lives in glue.asm (const..boot).
+$(BUILD)/pkg/wasm/glue.o: $(wildcard $(PKG)/wasm/glue/*.js)
 
 $(BUILD)/app/%.o: $(APP)/%.asm | $(BUILD)
 	@mkdir -p $(dir $@)
