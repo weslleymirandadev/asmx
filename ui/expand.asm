@@ -91,9 +91,16 @@ expand_block:
     lea rdi, [in_buf + rbx + 7] ; after "@import "
     lea rsi, [in_buf + r15]
     call parse_import
-    ; load the file at the resolved path (src/<path>.asx)
-    call load_component_import
-    jmp .imp_loaded
+    ; register the import (Name -> resolved path) so @@Name can find it.
+    ; The import line itself renders NOTHING (like `import X from "..."`
+    ; in JS): it is spliced away and only @@Name emits the component.
+    call register_import
+    mov qword [expand_len], 0   ; empty expansion -> the line disappears
+    mov rdi, r12                ; line start offset
+    mov rsi, r15                ; line end offset
+    call splice_in
+    add r13, rax                ; block end moved
+    jmp .loop
 .imp_no:
     ; "@@"? (custom component instantiation: @@card key="value")
     cmp byte [in_buf + rbx], '@'
@@ -116,8 +123,21 @@ expand_block:
     jz .no_chl_ext
     add r15, rax
 .no_chl_ext:
-    ; load src/components/<name>.asx into comp_buf
-    call load_component
+    ; the component MUST have been @import'ed first: @@Name looks the
+    ; name up in the import registry (no implicit src/components/
+    ; lookup). On a hit, import_path/import_path_len are filled with the
+    ; registered path and the file is loaded into comp_buf.
+    call lookup_import         ; rax = index or -1
+    cmp rax, -1
+    je .not_imported
+    ; copy the registered path into import_path and load the file
+    mov rdi, rax
+    call load_imported
+    jmp .imp_loaded
+.not_imported:
+    lea rdi, [msg_import_req]
+    mov rsi, msg_import_req_len
+    call die
 .imp_loaded:
     ; find the <name>: block inside comp_buf
     call find_comp_block        ; rax = content start, rdx = content end
@@ -505,44 +525,6 @@ parse_comp_args:
     call die
 
 ; ----------------------------------------------------------------------
-; load_component - builds comp_path = "src/components/<name>.asx" and reads
-; it into comp_buf/comp_len. Dies on a missing file.
-; ----------------------------------------------------------------------
-load_component:
-    push r12
-    push r13
-    lea rdi, [comp_path]
-    lea rsi, [s_components]
-    call strcpy_l               ; rax = dst end (null included)
-    mov r12, rax
-    mov r13, [comp_name_len]
-    mov rdi, r12
-    lea rsi, [comp_name]
-    mov rdx, r13
-    call memcpy
-    mov rdi, r12
-    add rdi, r13
-    mov byte [rdi], '.'
-    mov byte [rdi + 1], 'a'
-    mov byte [rdi + 2], 's'
-    mov byte [rdi + 3], 'x'
-    mov byte [rdi + 4], 0
-    lea rdi, [comp_path]
-    lea rsi, [comp_buf]
-    mov rdx, IN_CAP
-    call read_file_to
-    test rax, rax
-    js .err
-    mov [comp_len], rax
-    pop r13
-    pop r12
-    ret
-.err:
-    lea rdi, [msg_comp_missing]
-    mov rsi, msg_comp_missing_len
-    call die
-
-; ----------------------------------------------------------------------
 ; check_import_prefix(rdi = line start, rsi = line end ptr)
 ; -> rax = 1 if the line starts with the "@import " keyword (7 chars +
 ; a space/tab), else 0. The line must NOT be "@@" (handled separately).
@@ -777,6 +759,149 @@ load_component_import:
     lea rdi, [msg_import_missing]
     mov rsi, msg_import_missing_len
     call die
+
+; ----------------------------------------------------------------------
+; register_import - appends the current import (comp_name/comp_name_len +
+; import_path/import_path_len) to the import registry. Called after
+; parse_import, BEFORE load_component_import. Dies if MAX_IMPORTS is hit.
+; ----------------------------------------------------------------------
+register_import:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov rax, [import_count]
+    cmp rax, MAX_IMPORTS
+    jge .full
+    imul r12, rax, 64           ; offset into import_keys
+    imul r13, rax, 512          ; offset into import_paths
+    ; copy the name (comp_name, comp_name_len) into import_keys + r12
+    mov r14, [comp_name_len]
+    cmp r14, 63
+    jae .name_long
+    xor rbx, rbx
+.cp1:
+    cmp rbx, r14
+    jge .cp1_done
+    mov cl, [comp_name + rbx]
+    mov [import_keys + r12 + rbx], cl
+    inc rbx
+    jmp .cp1
+.cp1_done:
+    mov byte [import_keys + r12 + rbx], 0
+    ; copy the path (import_path, import_path_len) into import_paths + r13
+    mov r14, [import_path_len]
+    cmp r14, 511
+    jae .path_long
+    xor rbx, rbx
+.cp2:
+    cmp rbx, r14
+    jge .cp2_done
+    mov cl, [import_path + rbx]
+    mov [import_paths + r13 + rbx], cl
+    inc rbx
+    jmp .cp2
+.cp2_done:
+    mov byte [import_paths + r13 + rbx], 0
+    inc qword [import_count]
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.full:
+    lea rdi, [msg_import_max]
+    mov rsi, msg_import_max_len
+    call die
+.name_long:
+    lea rdi, [msg_import_name]
+    mov rsi, msg_import_name_len
+    call die
+.path_long:
+    lea rdi, [msg_import_path]
+    mov rsi, msg_import_path_len
+    call die
+
+; ----------------------------------------------------------------------
+; lookup_import -> rax = index of the import whose key matches
+; comp_name/comp_name_len, or -1. Keys are null-terminated; the caller's
+; comp_name is a length-delimited buffer (no null needed).
+; ----------------------------------------------------------------------
+lookup_import:
+    push rbx
+    push r12
+    push r13
+    push r14
+    xor r12, r12                ; idx
+.loop:
+    cmp r12, [import_count]
+    jge .none
+    ; compare import_keys[idx] against comp_name
+    mov r14, [comp_name_len]
+    xor r13, r13
+.cmp:
+    cmp r13, r14
+    jge .len_done
+    mov al, [comp_name + r13]
+    imul r10, r12, 64
+    add r10, r13
+    mov bl, [import_keys + r10]
+    cmp al, bl
+    jne .next
+    inc r13
+    jmp .cmp
+.len_done:
+    ; all comp_name chars matched: key must end here (null)
+    imul r10, r12, 64
+    add r10, r13
+    cmp byte [import_keys + r10], 0
+    jne .next
+    mov rax, r12
+    jmp .done
+.next:
+    inc r12
+    jmp .loop
+.none:
+    mov rax, -1
+.done:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; ----------------------------------------------------------------------
+; load_imported(rdi = index) - copies import_paths[index] into
+; import_path/import_path_len and loads the file into comp_buf (same as
+; load_component_import, but the path comes from the registry).
+; ----------------------------------------------------------------------
+load_imported:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi                ; index
+    ; copy import_paths[index] -> import_path (strcpy_l semantics)
+    lea rdi, [import_path]
+    imul r10, r12, 512
+    lea rsi, [import_paths + r10]
+    call strcpy_l               ; rax = end (null copied)
+    ; import_path_len = len (strcpy_l returns dst + len where the len
+    ; includes the null - recompute as strlen)
+    lea rdi, [import_path]
+    call strlen
+    mov [import_path_len], rax
+    ; delegate to load_component_import: it resolves the "@/" alias,
+    ; appends ".asx" if needed and reads the file into comp_buf.
+    ; (The registered path may still carry the "@/" alias verbatim.)
+    call load_component_import
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
 
 ; ----------------------------------------------------------------------
 ; find_comp_block - scans comp_buf for the "<name>:" label and returns its
@@ -1281,7 +1406,7 @@ splice_in:
     jne .no_nl
     inc rbx
 .no_nl:
-    ; move [src, in_len) to [line_start + expand_len, ...) backwards
+    ; move [src, in_len) to [line_start + expand_len, ...)
     mov rax, [in_len]
     sub rax, rbx                ; n
     mov rdx, [expand_len]
@@ -1289,7 +1414,17 @@ splice_in:
     add rdi, rdx                ; dst
     lea rsi, [in_buf + rbx]     ; src
     mov rdx, rax                ; n
+    ; direction: dst > src (growing, the usual @@ case) -> copy from the
+    ; end backwards; dst < src (collapsing, e.g. expand_len=0 removing an
+    ; @import line) -> copy from the start forwards. Picking the wrong
+    ; direction with overlapping regions corrupts the block.
+    cmp rdi, rsi
+    jae .grow
+    call memmove_front
+    jmp .after_move
+.grow:
     call memmove_back
+.after_move:
     ; copy the expanded block over the @@ line
     lea rdi, [in_buf + r12]     ; r12 is an offset, not a pointer
     lea rsi, [expand_buf]
@@ -1304,6 +1439,19 @@ splice_in:
     pop r13
     pop r12
     pop rbx
+    ret
+
+; ----------------------------------------------------------------------
+; memmove_front(rdi = dst, rsi = src, rdx = n) - copies [src, src+n) to
+; [dst, dst+n) from the start forwards (required when dst < src overlaps:
+; the tail of the source is still untouched while we copy the head).
+; ----------------------------------------------------------------------
+memmove_front:
+    test rdx, rdx
+    jz .done
+    mov rcx, rdx
+    rep movsb
+.done:
     ret
 
 ; ----------------------------------------------------------------------
