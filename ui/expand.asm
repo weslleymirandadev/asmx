@@ -75,34 +75,9 @@ expand_block:
     dec qword [comp_depth]
     jmp .pop
 .no_pop:
-    ; "@import <Name> from "@/path""? (Next.js-style component import,
-    ; alias @/ = src/; supports subfolders: @/components/ui/Button)
+    ; "@@"? (custom component instantiation: @@card key="value")
     cmp rbx, r15
     jge .next_line
-    cmp byte [in_buf + rbx], '@'
-    jne .next_line
-    ; check for the "@import " prefix (7 chars + space)
-    lea rdi, [in_buf + rbx]     ; line start POINTER
-    lea rsi, [in_buf + r15]     ; line end POINTER (r15 is an offset)
-    call check_import_prefix    ; rax = 1 if the line starts with "@import "
-    test rax, rax
-    jz .imp_no
-    ; parse "<Name> from "path"" -> comp_name + import_path
-    lea rdi, [in_buf + rbx + 7] ; after "@import "
-    lea rsi, [in_buf + r15]
-    call parse_import
-    ; register the import (Name -> resolved path) so @@Name can find it.
-    ; The import line itself renders NOTHING (like `import X from "..."`
-    ; in JS): it is spliced away and only @@Name emits the component.
-    call register_import
-    mov qword [expand_len], 0   ; empty expansion -> the line disappears
-    mov rdi, r12                ; line start offset
-    mov rsi, r15                ; line end offset
-    call splice_in
-    add r13, rax                ; block end moved
-    jmp .loop
-.imp_no:
-    ; "@@"? (custom component instantiation: @@card key="value")
     cmp byte [in_buf + rbx], '@'
     jne .next_line
     lea r8, [rbx + 1]
@@ -896,6 +871,87 @@ load_imported:
     ; appends ".asx" if needed and reads the file into comp_buf.
     ; (The registered path may still carry the "@/" alias verbatim.)
     call load_component_import
+    ; the component file may itself start with top-of-file @import lines
+    ; (nested components, %include-style): register them so inner @@Name
+    ; resolves during the build_expand below.
+    ; NOTE: scan_component_imports clobbers comp_name/comp_name_len via
+    ; parse_import - save/restore them (find_comp_block compares the
+    ; component label against comp_name right after this returns).
+    push qword [comp_name_len]
+    push qword [comp_name]
+    push qword [comp_name + 8]
+    push qword [comp_name + 16]
+    push qword [comp_name + 24]
+    push qword [comp_name + 32]
+    push qword [comp_name + 40]
+    push qword [comp_name + 48]
+    push qword [comp_name + 56]
+    call scan_component_imports
+    pop qword [comp_name + 56]
+    pop qword [comp_name + 48]
+    pop qword [comp_name + 40]
+    pop qword [comp_name + 32]
+    pop qword [comp_name + 24]
+    pop qword [comp_name + 16]
+    pop qword [comp_name + 8]
+    pop qword [comp_name]
+    pop qword [comp_name_len]
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; ----------------------------------------------------------------------
+; scan_component_imports - walks comp_buf line by line at column 0 and
+; registers every "@import Name from "@/path"" it finds, stopping at
+; the first non-import line (the component's own label). The registered
+; paths stay in the global registry for the whole compile (nested
+; components, %include-style).
+; ----------------------------------------------------------------------
+scan_component_imports:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    xor r12, r12
+.loop:
+    mov r13, [comp_len]
+    cmp r12, r13
+    jge .done
+    ; line [r12, r14)
+    mov r14, r12
+.scan:
+    cmp r14, r13
+    jge .have
+    cmp byte [comp_buf + r14], 10
+    je .have
+    inc r14
+    jmp .scan
+.have:
+    ; column-0 "@import "?
+    cmp byte [comp_buf + r12], '@'
+    jne .done
+    lea rdi, [comp_buf + r12]
+    lea rsi, [comp_buf + r14]
+    call check_import_prefix
+    test rax, rax
+    jz .done
+    lea rdi, [comp_buf + r12 + 7]
+    lea rsi, [comp_buf + r14]
+    call parse_import
+    call register_import
+    ; next line
+    mov r12, r14
+    cmp r12, r13
+    jge .done
+    cmp byte [comp_buf + r12], 10
+    jne .done
+    inc r12
+    jmp .loop
+.done:
     pop r15
     pop r14
     pop r13
