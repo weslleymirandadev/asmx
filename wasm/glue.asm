@@ -26,8 +26,13 @@ extern itoa_buf
 extern cl_prefix, crlf2, cc_nocache
 extern memcpy_adv, strcpy_adv
 extern write_status_line
+extern asx_send_status
 
 section .data
+    ; build-error file read by error_serve() (the dev loop writes it)
+    err_file_path db "build/asx-error.txt", 0
+    err_ct  db "Content-Type: text/plain; charset=utf-8", 13, 10, 0
+    ERR_MAX equ 16384
     ; NOTE: JS uses double quotes only (fits db '...' without escapes)
     ; the renderer lives in wasm/glue.js (plain JS - real editor syntax
     ; highlighting, no db '...' escaping). Embedded with incbin (resolved
@@ -42,6 +47,9 @@ section .data
     sse_cc  db "Cache-Control: no-cache", 13, 10, 0
     sse_body db "retry: 250", 10, 10, "data: ok", 10, 10
     sse_body_len equ $ - sse_body
+
+section .bss
+    err_body resb ERR_MAX
 
 section .text
 
@@ -104,6 +112,118 @@ wasm_glue_serve:
     js .err
 
     xor rax, rax
+    jmp .out
+.err:
+    mov rax, -1
+.out:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; ----------------------------------------------------------------------
+; error_serve() - the build-error endpoint for the frontend overlay.
+; Reads build/asx-error.txt (written by `asx dev` when a build fails).
+; If the file exists: 200 + text/plain + contents. If not: 404. The
+; glue polls this endpoint and mounts the error-overlay module.
+; ----------------------------------------------------------------------
+global error_serve
+error_serve:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+
+    ; open("build/asx-error.txt", O_RDONLY)
+    mov rax, SYS_openat
+    mov rdi, -100               ; AT_FDCWD
+    lea rsi, [err_file_path]
+    xor rdx, rdx                ; O_RDONLY
+    syscall
+    test rax, rax
+    js .nf
+    mov r12, rax                ; fd
+
+    ; read up to ERR_MAX bytes
+    xor r13, r13                ; total
+.read:
+    cmp r13, ERR_MAX
+    jge .read_done
+    mov rax, SYS_read
+    mov rdi, r12
+    lea rsi, [err_body + r13]
+    mov rdx, ERR_MAX
+    sub rdx, r13
+    syscall
+    test rax, rax
+    jle .read_done
+    add r13, rax
+    jmp .read
+.read_done:
+    mov rax, SYS_close
+    mov rdi, r12
+    syscall
+
+    ; build header in resp_buf
+    lea r15, [resp_buf]
+    call write_status_line        ; HTTP/1.1 200 OK\r\n
+    mov rdi, r15
+    lea rsi, [err_ct]
+    call strcpy_adv               ; Content-Type: text/plain
+    mov r15, rax
+    mov rdi, r15
+    lea rsi, [cc_nocache]
+    call strcpy_adv               ; Cache-Control: no-cache
+    mov r15, rax
+    mov rdi, r15
+    lea rsi, [cl_prefix]
+    call strcpy_adv               ; Content-Length: 
+    mov r15, rax
+    mov rdi, r13                  ; body size
+    lea rsi, [itoa_buf]
+    call itoa
+    mov rsi, rax
+    lea rdx, [itoa_buf + 11]
+    sub rdx, rsi
+    mov rdi, r15
+    call memcpy_adv
+    mov r15, rax
+    mov rdi, r15
+    lea rsi, [crlf2]
+    mov rdx, 4
+    call memcpy_adv               ; end of headers
+    mov r15, rax
+
+    ; write header
+    lea rax, [resp_buf]
+    sub r15, rax
+    mov rax, SYS_write
+    mov rdi, [client_fd]
+    lea rsi, [resp_buf]
+    mov rdx, r15
+    syscall
+    test rax, rax
+    js .err
+
+    ; write body
+    mov rax, SYS_write
+    mov rdi, [client_fd]
+    lea rsi, [err_body]
+    mov rdx, r13
+    syscall
+    test rax, rax
+    js .err
+
+    xor rax, rax
+    jmp .out
+.nf:
+    ; 404 - no build error right now
+    mov rdi, 404
+    call asx_send_status
+    mov rax, -1
     jmp .out
 .err:
     mov rax, -1
