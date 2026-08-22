@@ -935,13 +935,15 @@ ssr_css_view:
     lea rdi, [s_css_100]
     call out_str
 .ww_done:
-    ; min-height (h-*)
-    movzx eax, byte [r13 + 18]
+    ; min-height (h-*) - 16 bits from the widget record (same source as
+    ; width above); the style record byte was 8 bits and truncated
+    ; h-64 (256) -> 0 and h-96 (384) -> 128
+    movzx eax, word [rbx + 8]
     test eax, eax
     jz .no_hh
     lea rdi, [s_css_mh]
     call out_str
-    movzx edi, byte [r13 + 18]
+    movzx edi, word [rbx + 8]
     call ssr_dec
     lea rdi, [s_css_px_semi]
     call out_str
