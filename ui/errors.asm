@@ -223,12 +223,8 @@ err_at:
     mov r12, rax                ; line start ptr
     mov r13, rdx                ; line end ptr
     mov rbx, rcx                ; col within the line (0-based)
-    ; "  |" gutter line
-    lea rdi, [g_gutter]
-    call write_str
-    ; "<line> | " with the line number right-aligned (width 3)
-    lea rdi, [g_pad]
-    call write_str
+    ; format the line number FIRST (we need its digit count to align
+    ; the gutter "|" with the "|" that follows the number)
     pop rcx                     ; col (1-based)
     pop rdx                     ; line
     push rdx
@@ -236,8 +232,17 @@ err_at:
     mov rdi, rdx
     lea rsi, [num_buf]
     call fmt_u64
-    mov rdi, rsi
-    mov rsi, rax
+    mov r14, rax                ; digit count of the line number
+    ; gutter line: (digits+1) spaces + "|"
+    lea rdi, [c_spaces]
+    mov rsi, r14
+    inc rsi
+    call write_raw
+    lea rdi, [g_pipe_nl]
+    call write_str
+    ; "<line> | " (no fixed pad - the number's width IS the alignment)
+    lea rdi, [num_buf]
+    mov rsi, r14
     call write_raw
     lea rdi, [g_bar]
     call write_str
@@ -248,45 +253,70 @@ err_at:
     call write_raw
     lea rdi, [c_nl]
     call write_str
-    ; caret line: "  | " + spaces + ^... (underline the rest of the token)
-    lea rdi, [g_caret_pad]
-    call write_str
-    ; spaces = col-1
-    pop rcx                     ; col
-    pop rdx                     ; line (unused now)
-    mov r8, rcx
-    dec r8
+    ; caret line: (digits+1) spaces + "| " + spaces + carets.
+    ; Find the highlighted word: if the line contains a double-quoted
+    ; string, underline the WHOLE string (it's the import path); else
+    ; fall back to the token at the error column.
+    push r12
+    push r13
+    xor r8, r8                  ; caret start (offset within the line)
+    xor r9, r9                  ; caret length
+    mov rdi, r12
+    mov rsi, r13
+    call find_string            ; rax = start or -1, rdx = len
+    test rax, rax
+    js .no_str
+    mov r8, rax
+    mov r9, rdx
+    jmp .have_caret
+.no_str:
+    mov r8, rbx                 ; error column (0-based)
     xor r9, r9
+    lea rdi, [r12 + r8]
+    ; count non-space chars from the error column
+.tok:
+    cmp r9, 60
+    jge .have_caret
+    lea rsi, [rdi + r9]
+    cmp rsi, r13
+    jge .have_caret
+    cmp byte [rsi], ' '
+    je .have_caret
+    cmp byte [rsi], 9
+    je .have_caret
+    inc r9
+    jmp .tok
+.have_caret:
+    pop r13
+    pop r12
+    ; (digits) spaces + " | " (the g_bar's leading space completes the
+    ; alignment: digits+1 spaces total before the "|", same as the gutter)
+    lea rdi, [c_spaces]
+    mov rsi, r14
+    call write_raw
+    lea rdi, [g_bar]
+    call write_str
+    ; spaces = caret start
+    xor r10, r10
 .spc:
-    cmp r9, r8
+    cmp r10, r8
     jge .spc_done
     lea rdi, [c_space]
     call write_str
-    inc r9
+    inc r10
     jmp .spc
 .spc_done:
     lea rdi, [c_bold_red]
     call write_str
-    ; carets: from col to end of token (non-space chars)
-    lea rdi, [r12 + r8]         ; point at the error char
-    xor r9, r9
+    ; carets (counter in r12: syscall clobbers rcx AND r11, so r11
+    ; would be garbage after the first write_str - r12 is callee-saved)
+    xor r12, r12
 .caret:
-    cmp r9, 60
+    cmp r12, r9
     jge .caret_done
-    lea rsi, [rdi + r9]
-    cmp rsi, r13
-    jge .caret_done
-    cmp byte [rsi], ' '
-    je .caret_done
-    cmp byte [rsi], 9
-    je .caret_done
-    push rdi
-    push rsi
     lea rdi, [c_caret]
     call write_str
-    pop rsi
-    pop rdi
-    inc r9
+    inc r12
     jmp .caret
 .caret_done:
     lea rdi, [c_reset]
@@ -402,6 +432,54 @@ line_bounds:
     inc rdx
     jmp .fwd
 .have_end:
+    pop r13
+    pop r12
+    ret
+
+; ----------------------------------------------------------------------
+; find_string(rdi = line_start, rsi = line_end) - looks for the first
+; double-quoted string in the line. Returns rax = offset of the opening
+; quote (relative to line_start), rdx = length INCLUDING both quotes
+; (quote + content + quote). Returns rax = -1 if no string is found.
+; Used by err_at to underline the whole import path string instead of
+; just the token at the error column.
+; ----------------------------------------------------------------------
+find_string:
+    push r12
+    push r13
+    mov r12, rdi
+    mov r13, rsi
+    xor rcx, rcx
+.find_open:
+    lea rax, [r12 + rcx]
+    cmp rax, r13
+    jge .nf
+    cmp byte [r12 + rcx], 34    ; '"'
+    je .open_found
+    inc rcx
+    jmp .find_open
+.open_found:
+    ; opening quote at offset rcx; find the closing quote
+    mov rdx, rcx
+    inc rdx
+.find_close:
+    lea rax, [r12 + rdx]
+    cmp rax, r13
+    jge .nf
+    cmp byte [r12 + rdx], 34
+    je .close_found
+    inc rdx
+    jmp .find_close
+.close_found:
+    ; rax = start offset (rcx), len = (rdx - rcx) + 1 (includes quotes)
+    mov rax, rcx
+    sub rdx, rcx
+    add rdx, 1
+    pop r13
+    pop r12
+    ret
+.nf:
+    mov rax, -1
     pop r13
     pop r12
     ret
