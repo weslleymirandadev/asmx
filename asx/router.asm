@@ -35,6 +35,7 @@ extern resp_status
 extern requests
 extern wasm_glue_serve
 extern sse_serve
+extern error_serve
 extern slug_buf
 extern slug_len
 
@@ -42,6 +43,7 @@ section .data
     nf_route_path db "/__not_found", 0
     glue_path     db "/_asx/glue.js", 0
     events_path   db "/_asx/events", 0
+    error_path    db "/_asx/error", 0
 
 section .text
 
@@ -119,6 +121,18 @@ middleware_continue:
     pop r12
     jmp requests
 .glue_check:
+    ; framework virtual file: /_asx/error - the build-error endpoint for
+    ; the frontend overlay (reads build/asx-error.txt, 200 or 404)
+    lea rdi, [error_path]
+    lea rsi, [route]
+    call strcmp
+    test rax, rax
+    jnz .glue_js_check
+    call error_serve
+    pop r13
+    pop r12
+    jmp requests
+.glue_js_check:
     ; framework virtual file: /_asx/glue.js (the WASM UI renderer) -
     ; no public/ entry needed, the glue is part of the framework
     lea rdi, [glue_path]
