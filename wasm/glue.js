@@ -11,8 +11,8 @@
 // Phase machine: SSR -> HYDRATING -> INTERACTIVE (per mount).
 //
 // NOTE: this file is GENERATED - it is the concatenation of the modules
-// in wasm/glue/ (00-const.js, 01-state.js, 02-mount.js, 03-shell.js,
-// 04-spa.js, 05-overlay.js, 06-boot.js) produced by the Makefile rule:
+// in wasm/glue/ (const.js, state.js, mount.js, shell.js, spa.js,
+// overlay.js, boot.js) produced by the Makefile rule:
 //   wasm/glue.js: wasm/glue/*.js  ->  cat $^ > $@
 // Edit the MODULES, never this file.
 // =============================================================================
