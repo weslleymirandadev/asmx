@@ -19,8 +19,13 @@ extern mime_lookup
 extern write_status_line
 
 section .data
+    ; public/ lives INSIDE static/: user assets (images, videos, favicons)
+    ; are served from static/public/<path>; the route wasm modules stay at
+    ; static/<path>. One tree, no separate public/ dir at the project root.
+    pub_str db "static/public", 0
+    pub_str_len equ $ - pub_str - 1   ; copy without the null (path appends its own)
     static_str db "static", 0
-    static_str_len equ $ - static_str - 1   ; copy without the null (path appends its own)
+    static_str_len equ $ - static_str - 1
 
 section .text
 
@@ -33,30 +38,18 @@ http_serve_static:
     push r15
     mov r14, rdi              ; path (callee-saved, survives calls)
 
-    ; path_buf = "public" + path (path includes its null terminator)
-    lea rdi, [path_buf]
-    lea rsi, [static_str]
-    mov rdx, static_str_len
-    call memcpy_adv           ; rax = path_buf + len
-    mov rbx, rax              ; append dest
-    ; the path is copied verbatim - a dynamic route's wasm lives at the
-    ; literal [id] path (static/profile/[id]/page.wasm), same as the URL
-    mov rdi, r14
-    call strlen
-    inc rax                   ; copy the null too
-    mov rdx, rax
-    mov rdi, rbx
-    mov rsi, r14
-    call memcpy_adv
-
-    ; openat(AT_FDCWD, path_buf, O_RDONLY)
-    mov rax, SYS_openat
-    mov rdi, -100
-    lea rsi, [path_buf]
-    xor rdx, rdx
-    syscall
+    ; try static/public/<path> first, then static/<path>
+    lea rdi, [pub_str]
+    mov rsi, pub_str_len
+    call .try_open
     test rax, rax
-    js .nf                    ; no fd to close - return -1
+    jns .have_fd
+    lea rdi, [static_str]
+    mov rsi, static_str_len
+    call .try_open
+    test rax, rax
+    js .nf
+.have_fd:
     mov r12, rax              ; fd
 
     ; fstat(fd, stat_buf)
@@ -166,7 +159,48 @@ http_serve_static:
     pop rbx
     ret
 
+; ----------------------------------------------------------------------
+; .try_open(rdi = prefix ptr, rsi = prefix len) -> rax = fd or -1
+; Builds path_buf = "<prefix>/<path>" and opens it read-only. The path
+; is copied verbatim - a dynamic route's wasm lives at the literal [id]
+; path (static/profile/[id]/page.wasm), same as the URL.
+; memcpy_adv(rdi = dst, rsi = src, rdx = len) -> rax = dst + len
+; ----------------------------------------------------------------------
+.try_open:
+    push rbx
+    push r12
+    push r13
+    mov r13, rdi              ; prefix ptr
+    mov r12, rsi              ; prefix len
+    ; path_buf = prefix
+    lea rdi, [path_buf]
+    mov rsi, r13
+    mov rdx, r12
+    call memcpy_adv           ; rax = path_buf + prefix_len
+    ; append '/'
+    mov byte [rax], '/'
+    inc rax
+    mov rbx, rax              ; append dest (after '/')
+    ; append the path + null
+    mov rdi, r14
+    call strlen
+    inc rax                   ; copy the null too
+    mov rdx, rax
+    mov rdi, rbx
+    mov rsi, r14
+    call memcpy_adv
+    ; openat(AT_FDCWD, path_buf, O_RDONLY)
+    mov rax, SYS_openat
+    mov rdi, -100
+    lea rsi, [path_buf]
+    xor rdx, rdx
+    syscall
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
 section .bss
-    path_buf resb 512
+    path_buf resb 1024
     stat_buf resb 144
     file_buf resb 4096
