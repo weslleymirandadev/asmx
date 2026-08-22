@@ -45,6 +45,15 @@ process:
     lea rdi, [in_buf + r12 + 7]
     lea rsi, [in_buf + r14]
     call parse_import
+    ; set the GCC-style error location: this file (src_path), this line
+    mov rax, [src_path]
+    mov [err_file_ptr], rax
+    mov rdi, rax
+    call strlen
+    mov [err_file_len], rax
+    lea rdi, [in_buf]
+    mov [err_buf_ptr], rdi
+    mov [err_line_off], r12
     call register_import
     ; drop the line: advance r12 past it (and the \n)
     mov r12, r14
