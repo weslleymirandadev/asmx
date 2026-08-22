@@ -53,6 +53,23 @@ msg_import_missing db "ui-compile: cannot read imported component file", 10
 msg_import_missing_len equ $ - msg_import_missing
 msg_import_req db "ui-compile: component not imported - add ", 39, "@import Name from ", 34, "@/path", 34, 39, " before using @@Name", 10
 msg_import_req_len equ $ - msg_import_req
+; --- GCC-style error formatting (errors.asm) ---
+c_bold_cyan  db 27, "[1;36m", 0
+c_bold_red   db 27, "[1;31m", 0
+c_bold       db 27, "[1m", 0
+c_reset      db 27, "[0m", 0
+c_colon      db ":", 0
+c_colon_space db ": ", 0
+c_nl         db 10, 0
+c_space      db " ", 0
+c_caret      db "^", 0
+s_error      db "error", 0
+err_msg_base db "cannot read imported component file: ", 0
+err_msg_base_len equ $ - err_msg_base - 1   ; exclude the null
+g_gutter     db "  |", 10, 0
+g_pad        db "   ", 0
+g_bar        db " | ", 0
+g_caret_pad  db "  | ", 0
 msg_import_max db "ui-compile: too many @imports (limit 32)", 10
 msg_import_max_len equ $ - msg_import_max
 msg_import_name db "ui-compile: @import name too long (max 63)", 10
