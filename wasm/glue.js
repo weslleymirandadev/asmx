@@ -9,6 +9,12 @@
 // history state. Hovering a link pre-fetches its wasm module.
 //
 // Phase machine: SSR -> HYDRATING -> INTERACTIVE (per mount).
+//
+// NOTE: this file is GENERATED - it is the concatenation of the modules
+// in wasm/glue/ (00-const.js, 01-state.js, 02-mount.js, 03-shell.js,
+// 04-spa.js, 05-overlay.js, 06-boot.js) produced by the Makefile rule:
+//   wasm/glue.js: wasm/glue/*.js  ->  cat $^ > $@
+// Edit the MODULES, never this file.
 // =============================================================================
 
 const TAG_NAMES = ["div","main","div","section","nav","header","footer","article","aside","figure","blockquote","ul","ol","li","form","table","thead","tbody","tfoot","tr","td","th","details","dialog","video","audio","picture","iframe","canvas","select","textarea","fieldset","dl","dt","dd","menu","hgroup","h1","h2","h3","h4","h5","h6","p","span","a","label","strong","em","code","pre","small","b","i","u","mark","time","cite","q","abbr","sub","sup","kbd","samp","var","del","ins","s","option","figcaption","legend","caption","summary","button","img","input","br","hr","source","meta","link","area","base","col","embed","track","wbr"];
@@ -30,7 +36,6 @@ const FAM = ["","ui-sans-serif,system-ui,sans-serif,\"Apple Color Emoji\",\"Sego
 
 const tagFor = (type, tagId) => tagId ? (TAG_NAMES[tagId] || "DIV").toUpperCase() : (type === 1 ? "SPAN" : type === 2 ? "CANVAS" : "DIV");
 const hex = (v) => "#"+((v>>16)&255).toString(16).padStart(2,"0")+((v>>8)&255).toString(16).padStart(2,"0")+(v&255).toString(16).padStart(2,"0");
-
 // ---------------------------------------------------------------------------
 // SPA navigation state (module-level so boot/navigate/hot-reload share it)
 // ---------------------------------------------------------------------------
@@ -78,29 +83,15 @@ const fetch_req = (up, ul, mp, ml, bp, bl) => {
   xhr.open(method, url, false);
   if (body !== null) xhr.setRequestHeader("Content-Type", "application/json");
   xhr.send(body);
-  const txt = xhr.responseText || "";
-  const enc = new TextEncoder().encode(txt);
-  const e = live.e;
-  const cap = (e.resp_cap && e.resp_cap()) || 4096;
-  const n = Math.min(enc.length, cap);
-  const dst = e.resp_area ? e.resp_area() : 0;
-  new Uint8Array(buf).set(enc.subarray(0, n), dst);
-  if (e.resp_len) e.resp_len.value = n;
-  return xhr.status || 0;
+  if (xhr.status >= 200 && xhr.status < 300) {
+    const r = new TextEncoder().encode(xhr.responseText);
+    const m = live.mem();
+    const arr = new Uint8Array(m);
+    arr.set(r, 0);
+    return r.length;
+  }
+  return 0;
 };
-
-// ---------------------------------------------------------------------------
-// mount(instance, ui, snap)
-// Instantiate a WASM module on the live DOM element `ui`.
-//   instance - WebAssembly.Instance (already instantiated)
-//   ui       - the <div id="ui"> element to hydrate/render into
-//   snap     - hydration snapshot object (from <script type="application/asx-state">)
-// Returns { e, mem, syncDOM, els, byId, phase, state, stop }.
-// `state` is a MUTABLE holder for the exports: hot reload swaps
-// live.state.e and every closure (syncDOM, input handlers, canvas loop)
-// reads through state.e - so a hot reload renders the NEW module's data
-// instead of reverting to the old module's memory.
-// ---------------------------------------------------------------------------
 const mount = (instance, ui, snap) => {
   const state = { e: instance.exports };
   const mem = () => state.e.memory.buffer;
@@ -715,7 +706,7 @@ const navigate = async (path, opts) => {
 // Build-error overlay (Next.js style).
 // Polls /_asx/error (the dev loop writes build/asx-error.txt on a failed
 // build). When it returns 200, mounts the framework-internal
-// error-overlay module (compiled from asx/error-overlay.asx) into a fixed
+// error-overlay module (compiled from asx/ui/error-overlay.asx) into a fixed
 // full-screen container on top of the page and fills in the error text.
 // When it returns 404, removes the overlay.
 // ---------------------------------------------------------------------------
