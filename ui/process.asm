@@ -30,6 +30,31 @@ process:
     inc r14
     jmp .scan
 .have_line:
+    ; top-of-file @import? ("@import Name from \"@/path\"" like %include)
+    ; Only at column 0 (file-level directive). Registered here so any
+    ; @@Name below resolves; the line itself produces no output.
+    mov al, [in_buf + r12]
+    cmp al, '@'
+    jne .no_file_import
+    lea rdi, [in_buf + r12]
+    lea rsi, [in_buf + r14]
+    call check_import_prefix
+    test rax, rax
+    jz .no_file_import
+    ; parse "<Name> from "path"" -> comp_name + import_path
+    lea rdi, [in_buf + r12 + 7]
+    lea rsi, [in_buf + r14]
+    call parse_import
+    call register_import
+    ; drop the line: advance r12 past it (and the \n)
+    mov r12, r14
+    cmp r12, r13
+    jge .done
+    cmp byte [in_buf + r12], 10
+    jne .done
+    inc r12
+    jmp .loop
+.no_file_import:
     ; label candidata?
     lea rdi, [in_buf + r12]
     mov rsi, r14
