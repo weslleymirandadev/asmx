@@ -51,6 +51,8 @@ tp_prop_count: resq 1
 comp_path:    resb 512
 comp_name:    resb 64
 comp_name_len: resq 1
+import_path:  resb 512
+import_path_len: resq 1
 comp_stack:   resb MAX_COMP_DEPTH * 8
 comp_depth:   resq 1
 save_label_buf: resb 64
