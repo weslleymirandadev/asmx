@@ -15,15 +15,18 @@
 //      NOT reverted (regression: closures must read the NEW module memory)
 //   6. hot reload with UNCHANGED bytes -> no-op (no re-render storm)
 //
-// Usage: node spa_test.mjs <glue-file> [port]
+// Usage: node spa_test.mjs [port]
 // Exit 0 = all pass. No deps, no DOM lib.
+// The glue bundle comes from glue-bundle.mjs (the 7 wasm/glue modules
+// concatenated in the same order as the incbins in glue.asm - the
+// framework has no generated glue.js file).
 
-import { readFileSync } from "node:fs";
+import { glueBundle } from "./glue-bundle.mjs";
 
-const [gluePath, portStr] = process.argv.slice(2);
+const [portStr] = process.argv.slice(2);
 const PORT = parseInt(portStr || "3000", 10);
 const ORIGIN = "http://localhost:" + PORT;
-const glue = readFileSync(gluePath, "utf8");
+const glue = glueBundle();
 
 // ---------------------------------------------------------------- fake DOM
 class FakeStyle {
