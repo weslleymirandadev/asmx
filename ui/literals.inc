@@ -42,7 +42,6 @@ msg_comp_depth db "ui-compile: component nesting too deep", 10
 msg_comp_depth_len equ $ - msg_comp_depth
 msg_comp_args  db "ui-compile: invalid @@ component arguments", 10
 msg_comp_args_len equ $ - msg_comp_args
-s_components   db "src/components/", 0
 s_children     db "children", 0
 s_import       db "@import", 0
 s_from         db "from", 0
@@ -52,6 +51,14 @@ msg_import_bad db "ui-compile: invalid @import (expected: @import Name from ", 3
 msg_import_bad_len equ $ - msg_import_bad
 msg_import_missing db "ui-compile: cannot read imported component file", 10
 msg_import_missing_len equ $ - msg_import_missing
+msg_import_req db "ui-compile: component not imported - add ", 39, "@import Name from ", 34, "@/path", 34, 39, " before using @@Name", 10
+msg_import_req_len equ $ - msg_import_req
+msg_import_max db "ui-compile: too many @imports (limit 32)", 10
+msg_import_max_len equ $ - msg_import_max
+msg_import_name db "ui-compile: @import name too long (max 63)", 10
+msg_import_name_len equ $ - msg_import_name
+msg_import_path db "ui-compile: @import path too long (max 511)", 10
+msg_import_path_len equ $ - msg_import_path
 
 ; --- literais do output (shell no page.s + WAT) ---
 s_sh1         db "_shell: db ", 0
