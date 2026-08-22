@@ -13,14 +13,13 @@ section .data
         @main p-8 gap-4
             @div flex items-center gap-3
                 @div w-3 h-3 rounded-full bg-red-500 animate-pulse
-                @h1 text-xl font-black tracking-tight:
-                    "Build Error"
-            @end
+                    @h1 text-xl font-black tracking-tight:
+                        "Build Error"
             @div w-full h-px bg-white opacity-10
-            @p font-mono text-sm leading-relaxed text-red-300 break-words:
-                "ASX_ERROR_TEXT"
-            @end
+                @p font-mono text-sm leading-relaxed text-red-300 break-words:
+                    "ASX_ERROR_TEXT"
         @end
+        
 page err_overlay_page
 section .SERVER
 err_overlay_page:
