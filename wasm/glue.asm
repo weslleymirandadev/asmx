@@ -23,7 +23,7 @@
 extern client_fd
 extern resp_buf
 extern itoa_buf
-extern cl_prefix, crlf2
+extern cl_prefix, crlf2, cc_nocache
 extern memcpy_adv, strcpy_adv
 extern write_status_line
 
@@ -58,7 +58,11 @@ wasm_glue_serve:
     call write_status_line        ; HTTP/1.1 200 OK\r\n
     mov rdi, r15
     lea rsi, [glue_ct]
-    call strcpy_adv               ; Content-Type line
+    call strcpy_adv               ; Content-Type: text/javascript
+    mov r15, rax
+    mov rdi, r15
+    lea rsi, [cc_nocache]
+    call strcpy_adv               ; Cache-Control: no-cache
     mov r15, rax
     mov rdi, r15
     lea rsi, [cl_prefix]
