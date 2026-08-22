@@ -12,20 +12,23 @@
 //   8. root absent -> CSR fallback (fresh #ui, no data-asx-root)
 //   9. snapshot ssr.state -> restored BEFORE first render (count: 42)
 //
-// Usage: node tests/hydration_test.mjs <html-file> <glue-file> <wasm-file>
+// Usage: node tests/hydration_test.mjs <html-file> <wasm-file>
 // Exit 0 = all pass. No deps, no DOM lib - the fake DOM implements exactly
 // what the glue touches (element.style.cssText, setAttribute, appendChild,
 // remove, closest, querySelectorAll("[data-asx-id]"), scripts, EventSource).
+// (the glue bundle comes from glue-bundle.mjs - the 7 wasm/glue modules
+// concatenated in the same order as the incbins in glue.asm)
 
 import { readFileSync } from "node:fs";
+import { glueBundle } from "./glue-bundle.mjs";
 
-const [htmlPath, gluePath, wasmPath] = process.argv.slice(2);
-if (!htmlPath || !gluePath || !wasmPath) {
-  console.error("usage: node hydration_test.mjs <html> <glue.js> <index.wasm>");
+const [htmlPath, wasmPath] = process.argv.slice(2);
+if (!htmlPath || !wasmPath) {
+  console.error("usage: node hydration_test.mjs <html> <index.wasm>");
   process.exit(2);
 }
 const html = readFileSync(htmlPath, "utf8");
-const glue = readFileSync(gluePath, "utf8");
+const glue = glueBundle();
 const wasmBytes = readFileSync(wasmPath);
 
 // ---------------------------------------------------------------- fake DOM
