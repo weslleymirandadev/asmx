@@ -823,35 +823,36 @@ register_import:
 .missing:
     pop r13
     pop r12
-    ; print "ui-compile: cannot read imported component file: <path>" and exit
+    ; GCC-style: <file>:<line>:<col>: error: cannot read imported
+    ; component file: <comp_path>, with a source snippet + caret.
+    ; err_file_ptr/err_file_len/err_line_off/err_buf_ptr were set by
+    ; the caller (the top-of-file @import scan or the nested scan).
+    ; err_file_ptr points to a STABLE buffer (src_path for the page,
+    ; err_file_name for a component - comp_path itself is rewritten by
+    ; build_import_path, so it can't be the location source).
+    ; build the full message in import_err_buf: base + comp_path
     lea rdi, [import_err_buf]
-    lea rsi, [msg_import_missing]
-    mov rdx, msg_import_missing_len
-    call memcpy                 ; copy the base message
-    lea rdi, [import_err_buf + msg_import_missing_len - 1]  ; overwrite the \n
-    mov byte [rdi], ':'
-    mov byte [rdi + 1], ' '
-    ; append comp_path
+    lea rsi, [err_msg_base]
+    mov rdx, err_msg_base_len
+    call memcpy
+    lea rdi, [import_err_buf + err_msg_base_len]
     lea rsi, [comp_path]
-    mov rdx, 0
+    xor rdx, rdx
 .cplen:
     cmp byte [rsi + rdx], 0
     je .cp_done
     inc rdx
     jmp .cplen
 .cp_done:
-    lea rdi, [import_err_buf + msg_import_missing_len + 1]
     call memcpy
-    ; trailing newline
-    lea rdi, [import_err_buf + msg_import_missing_len + 1 + rdx]
-    mov byte [rdi], 10
-    ; write to stderr (fd 2)
-    mov rax, SYS_write
-    mov rdi, 2
-    lea rsi, [import_err_buf]
-    lea rdx, [msg_import_missing_len + 1 + rdx + 1]
-    syscall
-    exit_code 1
+    ; total len = err_msg_base_len + rdx
+    lea r9, [err_msg_base_len + rdx]
+    mov rdi, [err_buf_ptr]
+    mov rsi, [err_line_off]
+    mov rdx, [err_file_ptr]
+    mov rcx, [err_file_len]
+    lea r8, [import_err_buf]
+    call err_at
 .full:
     lea rdi, [msg_import_max]
     mov rsi, msg_import_max_len
@@ -1010,6 +1011,31 @@ scan_component_imports:
     lea rdi, [comp_buf + r12 + 7]
     lea rsi, [comp_buf + r14]
     call parse_import
+    ; set the GCC-style error location: the component file, this line.
+    ; comp_path is REWRITTEN by the register's build_import_path, so copy
+    ; it into the stable err_file_name buffer first.
+    lea rsi, [comp_path]
+    lea rdi, [err_file_name]
+    xor rdx, rdx
+.snlen:
+    cmp byte [rsi + rdx], 0
+    je .sn_have
+    inc rdx
+    jmp .snlen
+.sn_have:
+    push rdi
+    push rsi
+    push rdx
+    call memcpy
+    pop rdx
+    pop rsi
+    pop rdi
+    lea rax, [err_file_name]
+    mov [err_file_ptr], rax
+    mov [err_file_len], rdx
+    lea rdi, [comp_buf]
+    mov [err_buf_ptr], rdi
+    mov [err_line_off], r12
     call register_import
     ; next line
     mov r12, r14
