@@ -59,6 +59,8 @@ import_path_len: resq 1
 import_keys:  resb MAX_IMPORTS * 64     ; name (null-terminated)
 import_paths: resb MAX_IMPORTS * 512    ; resolved path ("src/...")
 import_count: resq 1
+; error message buffer: "cannot read imported component file: <path>"
+import_err_buf: resb 1024
 comp_stack:   resb MAX_COMP_DEPTH * 8
 comp_depth:   resq 1
 save_label_buf: resb 64
