@@ -226,7 +226,9 @@ const t = (name, mutate, expectError) => {
 
 t("1 base: clean SSR hydrates with no errors", null, false);
 t("2 text mismatch -> logged + fixed", (ui) => {
-  const s = ui.querySelectorAll("[data-asx-id]").find((e) => e.getAttribute("data-asx-id") === "5");
+  // a real text node (leaf span, no children) - the layout shifts when
+  // new widgets are added to the fixture, so find it dynamically
+  const s = ui.querySelectorAll("[data-asx-id]").find((e) => e.tagName === "SPAN" && e.children.length === 0);
   if (s) s.textContent = "WRONG TEXT";
 }, true);
 t("3 style divergence -> re-applied", (ui) => {
@@ -234,7 +236,7 @@ t("3 style divergence -> re-applied", (ui) => {
   if (s) s.style.cssText = "position:absolute;left:9999px;";
 }, false);
 t("4 missing leaf node -> re-created (diagnosed)", (ui) => {
-  const s = ui.querySelectorAll("[data-asx-id]").find((e) => e.getAttribute("data-asx-id") === "5");
+  const s = ui.querySelectorAll("[data-asx-id]").find((e) => e.tagName === "SPAN" && e.children.length === 0);
   if (s) s.remove();
 }, true);
 t("5 extra node (id>=count) -> removed", (ui) => {
